@@ -5,7 +5,7 @@
 import json
 import logging
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone 
 from typing import Any, Dict, List
 
 # Настройка Pydantic для работы с vkbottle
@@ -18,7 +18,6 @@ except ImportError:
 from vkbottle.bot import Bot, Message
 
 from config import (
-    ADMIN_CONTACT_URL,
     ADMIN_IDS,
     DATE_FORMAT,
     SLOT_INTERVAL_MIN,
@@ -114,7 +113,10 @@ def time_slots_keyboard(date: datetime.date, page: int = 0):
     # Фильтруем слоты по расписанию работы
     all_slots = _all_time_slots()
     times = []
-    now = datetime.now()
+    
+    offset = timedelta(hours=3)
+    dt = timezone(offset, name='МСК')
+    now = datetime.now(dt)
     
     for time_slot in all_slots:
         slot_hour = int(time_slot[:2])
@@ -535,12 +537,6 @@ def register(bot: Bot):
             return
         admin_context[message.from_id] = {"step": "blacklist_remove"}
         await message.answer("Отправьте ссылку пользователя для удаления из черного списка.")
-
-    @bot.on.private_message(text=["Связаться с пользователем"])
-    async def share_contact_template(message: Message):
-        if not is_admin(message):
-            return
-        await show_bookings(message)
 
     @bot.on.private_message(
         func=lambda m: admin_context.get(m.from_id, {}).get("step")

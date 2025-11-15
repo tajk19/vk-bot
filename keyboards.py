@@ -47,7 +47,6 @@ def admin_menu() -> Keyboard:
     keyboard.add(Text("+ в черный список"))
     keyboard.add(Text("- из черного списка"))
     keyboard.row()
-    keyboard.add(Text("Связаться с пользователем"))
     keyboard.add(Text("Вернуться"))
     return keyboard
 
@@ -163,7 +162,6 @@ def unblock_keyboard(blockings: Sequence[dict]) -> Keyboard:
             )
         )
         keyboard.row()
-    keyboard.add(Text("Отмена", payload={"action": "admin_unblock_cancel"}))
     keyboard.add(Text("Вернуться", payload={"action": "back_to_menu"}))
     return keyboard
 

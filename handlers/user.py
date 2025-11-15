@@ -6,7 +6,7 @@ import json
 import logging
 import random
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 # Настройка Pydantic для работы с vkbottle
@@ -33,7 +33,6 @@ from google_sheets import (
     delete_booking,
     time_of_begining,
     time_of_end,
-    get_blacklist,
     get_blacklist_sync,
     get_bookings,
     get_user_active_bookings,
@@ -211,7 +210,11 @@ def free_times_for_date(
             booking for booking in active_bookings if booking.get("Дата") == date_str
         ]
     existing = {booking["Время"] for booking in bookings}
-    now = datetime.now()
+
+    offset = timedelta(hours=3)
+    dt = timezone(offset, name='МСК')
+    now = datetime.now(dt)
+    
     slots: List[str] = []
     
     # Определяем время начала в зависимости от дня недели

@@ -6,6 +6,7 @@ import asyncio
 import datetime
 import logging
 from typing import Optional
+from datetime import datetime, timedelta, timezone
 
 from vkbottle.bot import Bot
 
@@ -35,7 +36,10 @@ async def notification_loop(bot: Bot):
     - Через WASH_DURATION_MIN + NOTIFY_AFTER_MIN минут после начала уведомляет об окончании
     """
     while True:
-        now = datetime.datetime.now()
+        offset = timedelta(hours=3)
+        dt = timezone(offset, name='МСК')
+        now = datetime.now(dt)
+
         today_bookings = get_bookings(
             date=now.date(),
             statuses={STATUS_CONFIRMED},
@@ -44,7 +48,7 @@ async def notification_loop(bot: Bot):
         for booking in today_bookings:
             booking_time_str = f"{booking['Дата']} {booking['Время']}"
             try:
-                booking_start = datetime.datetime.strptime(
+                booking_start = datetime.strptime(
                     booking_time_str, "%Y-%m-%d %H:%M"
                 )
             except ValueError:
@@ -112,7 +116,7 @@ async def notification_loop(bot: Bot):
                 
             booking_time_str = f"{booking['Дата']} {booking['Время']}"
             try:
-                booking_start = datetime.datetime.strptime(
+                booking_start = datetime.strptime(
                     booking_time_str, "%Y-%m-%d %H:%M"
                 )
             except ValueError:
