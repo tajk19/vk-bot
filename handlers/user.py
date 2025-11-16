@@ -318,13 +318,11 @@ def register(bot: Bot):
     async def greet_user(message: Message):
         if is_admin(message.from_id):
             await message.answer(
-                message,
                 "Привет! Вы в режиме администратора.",
                 keyboard=admin_menu(),
             )
         else:
             await message.answer(
-                message,
                 "Привет! Я бот для записи на стирку вещей.\n"
                 "Спасибо, что выбираешь постираться у меня! 🥺\n"
                 "Вот такие расценки:\n"
@@ -342,7 +340,6 @@ def register(bot: Bot):
     )
     async def contact_admin(message: Message):
         await message.answer(
-            message,
             f"Связаться с администратором: {ADMIN_CONTACT_URL}",
             keyboard=main_menu(is_admin=is_admin(message.from_id)),
         )
@@ -353,11 +350,11 @@ def register(bot: Bot):
         user_link = f"https://vk.com/id{message.from_id}"
         blacklist = get_blacklist_sync()
         if user_link in blacklist:
-            await message.answer(message, "❌ Вы в черном списке и не можете записываться.")
+            await message.answer("❌ Вы в черном списке и не можете записываться.")
             return
 
         # Отправляем быстрый ответ пользователю
-        await message.answer(message, "⏳ Загрузка доступных дат...")
+        await message.answer("⏳ Загрузка доступных дат...")
         
         # Получаем активные записи
         active_bookings = get_bookings(statuses=ACTIVE_STATUSES)
@@ -365,7 +362,6 @@ def register(bot: Bot):
         # Быстрая проверка доступности дат
         if not available_dates(active_bookings):
             await message.answer(
-                message,
                 "❌ Сейчас нет свободных слотов для записи.\n"
                 f"Свяжитесь с администратором: {ADMIN_CONTACT_URL}",
                 keyboard=main_menu(is_admin=is_admin(message.from_id)),
@@ -379,7 +375,6 @@ def register(bot: Bot):
             "active_bookings": active_bookings,
         }
         await message.answer(
-            message,
             "Выберите дату для записи:",
             keyboard=date_keyboard(active_bookings=active_bookings),
         )
@@ -397,7 +392,6 @@ def register(bot: Bot):
         if payload.get("action") == "back_to_menu":
             reset_context(message.from_id)
             await message.answer(
-                message,
                 "Главное меню:",
                 keyboard=main_menu(is_admin=is_admin(message.from_id)),
             )
@@ -406,7 +400,6 @@ def register(bot: Bot):
         if payload.get("action") == "paginate" and payload.get("target") == "date":
             page = payload.get("page", 0)
             await message.answer(
-                message,
                 "Выберите дату для записи:",
                 keyboard=date_keyboard(page, active_bookings=active_bookings),
             )
@@ -421,7 +414,6 @@ def register(bot: Bot):
             selected_date = datetime.strptime(date_text, DATE_FORMAT).date()
         except ValueError:
             await message.answer(
-                message,
                 "❌ Пожалуйста, выберите дату с клавиатуры.",
                 keyboard=date_keyboard(active_bookings=active_bookings),
             )
@@ -429,7 +421,6 @@ def register(bot: Bot):
 
         if selected_date not in booking_window_dates():
             await message.answer(
-                message,
                 "❌ Эту дату выбрать нельзя. Попробуйте другую:",
                 keyboard=date_keyboard(active_bookings=active_bookings),
             )
@@ -438,7 +429,6 @@ def register(bot: Bot):
         free_times, keyboard = time_keyboard(selected_date, active_bookings=active_bookings)
         if not free_times:
             await message.answer(
-                message,
                 "❌ На выбранную дату нет свободных слотов.\n"
                 "Выберите другую дату или свяжитесь с администратором.",
                 keyboard=date_keyboard(active_bookings=active_bookings),
@@ -448,7 +438,6 @@ def register(bot: Bot):
         user_context[message.from_id]["date"] = selected_date
         user_context[message.from_id]["step"] = "choose_time"
         await message.answer(
-            message,
             f"Дата *{selected_date.strftime(DATE_FORMAT)}* выбрана. Теперь выберите время:",
             keyboard=keyboard,
         )
@@ -461,7 +450,6 @@ def register(bot: Bot):
         if not context or "date" not in context:
             reset_context(message.from_id)
             await message.answer (
-                message,
                 "Сессия бронирования сброшена. Начните заново командой «Записаться».",
                 keyboard=main_menu(is_admin=is_admin(message.from_id)),
             )
@@ -477,7 +465,6 @@ def register(bot: Bot):
         if payload.get("action") == "back_to_menu":
             reset_context(message.from_id)
             await message.answer(
-                message,
                 "Главное меню:",
                 keyboard=main_menu(is_admin=is_admin(message.from_id)),
             )
@@ -487,7 +474,6 @@ def register(bot: Bot):
             page = payload.get("page", 0)
             _, keyboard = time_keyboard(selected_date, active_bookings, page)
             await message.answer(
-                message,
                 "Выберите время:",
                 keyboard=keyboard,
             )
@@ -503,7 +489,6 @@ def register(bot: Bot):
         except ValueError:
             _, keyboard = time_keyboard(selected_date, active_bookings)
             await message.answer(
-                message,
                 "❌ Пожалуйста, выберите время с клавиатуры.",
                 keyboard=keyboard,
             )
@@ -512,7 +497,6 @@ def register(bot: Bot):
         if not is_time_free(selected_date, time_text):
             _, keyboard = time_keyboard(selected_date, active_bookings)
             await message.answer(
-                message,
                 "❌ Слот уже занят. Выберите другое время:",
                 keyboard=keyboard,
             )
@@ -526,7 +510,6 @@ def register(bot: Bot):
         if len(bookings_same_day) >= MAX_SLOTS_PER_DAY:
             reset_context(message.from_id)
             await message.answer(
-                message,
                 "❌ Вы достигли лимита бронирований на выбранную дату.",
                 keyboard=main_menu(is_admin=is_admin(message.from_id)),
             )
@@ -536,7 +519,6 @@ def register(bot: Bot):
         context["step"] = "choose_options"
         context["options"] = []
         await message.answer(
-            message,
             "Выберите дополнительные опции (по желанию):",
             keyboard=wash_options_keyboard(WASH_OPTIONS, []),
         )
@@ -549,7 +531,6 @@ def register(bot: Bot):
         if not context or "date" not in context or "time" not in context:
             reset_context(message.from_id)
             await message.answer(
-                message,
                 "Сессия бронирования сброшена. Начните заново командой «Записаться».",
                 keyboard=main_menu(is_admin=is_admin(message.from_id)),
             )
@@ -563,7 +544,6 @@ def register(bot: Bot):
         if action == "back_to_menu":
             reset_context(message.from_id)
             await message.answer(
-                message,
                 "Главное меню:",
                 keyboard=main_menu(is_admin=is_admin(message.from_id)),
             )
@@ -580,7 +560,6 @@ def register(bot: Bot):
                     selected_options.append(option_value)
             context["options"] = selected_options
             await message.answer(
-                message,
                 "Обновлённые опции:",
                 keyboard=wash_options_keyboard(WASH_OPTIONS, selected_options),
             )
@@ -589,7 +568,6 @@ def register(bot: Bot):
         if action == "options_reset":
             selected_options.clear()
             await message.answer(
-                message,
                 "Опции сброшены.",
                 keyboard=wash_options_keyboard(WASH_OPTIONS, selected_options),
             )
@@ -598,7 +576,6 @@ def register(bot: Bot):
         if action == "options_cancel":
             reset_context(message.from_id)
             await message.answer(
-                message,
                 "Выбор отменён.",
                 keyboard=main_menu(is_admin=is_admin(message.from_id)),
             )
@@ -606,7 +583,6 @@ def register(bot: Bot):
 
         if action != "options_done":
             await message.answer(
-                message,
                 "Используйте кнопки, чтобы выбрать опции, или нажмите «Готово».",
                 keyboard=wash_options_keyboard(WASH_OPTIONS, selected_options),
             )
@@ -617,7 +593,6 @@ def register(bot: Bot):
         if not is_time_free(selected_date, time_text):
             reset_context(message.from_id)
             await message.answer(
-                message,
                 "❌ Пока вы выбирали опции, слот заняли. Попробуйте снова.",
                 keyboard=main_menu(is_admin=is_admin(message.from_id)),
             )
@@ -660,7 +635,6 @@ def register(bot: Bot):
 
         reset_context(message.from_id)
         await message.answer(
-            message,
             "✅ Заявка отправлена на подтверждение администратору.\n"
             "Вносите оплату по номеру - +79842878451 (альфа банк) и ждите подтверждения\n"
             "Мы уведомим вас после принятия решения.",
@@ -673,7 +647,6 @@ def register(bot: Bot):
         bookings = get_user_active_bookings(message.from_id)
         if not bookings:
             await message.answer(
-                message,
                 "❌ У вас нет активных записей.",
                 keyboard=main_menu(is_admin=is_admin(message.from_id)),
             )
@@ -687,7 +660,6 @@ def register(bot: Bot):
 
         details = "\n".join(format_booking(record) for record in bookings)
         await message.answer(
-            message,
             "Выберите запись для отмены:\n"
             f"{details}",
             keyboard=cancellation_keyboard(bookings),
@@ -704,7 +676,6 @@ def register(bot: Bot):
         if action == "back_to_menu":
             reset_context(message.from_id)
             await message.answer(
-                message,
                 "Главное меню:",
                 keyboard=main_menu(is_admin=is_admin(message.from_id)),
             )
@@ -713,7 +684,6 @@ def register(bot: Bot):
         if action == "cancel_abort":
             reset_context(message.from_id)
             await message.answer(
-                message,
                 "Отмена бронирования прервана.",
                 keyboard=main_menu(is_admin=is_admin(message.from_id)),
             )
@@ -721,7 +691,6 @@ def register(bot: Bot):
 
         if action != "cancel_booking":
             await message.answer(
-                message,
                 "Выберите запись кнопкой на клавиатуре или нажмите «Отмена».",
                 keyboard=cancellation_keyboard(
                     list(context.get("bookings", {}).values())
@@ -735,7 +704,6 @@ def register(bot: Bot):
         if not record:
             reset_context(message.from_id)
             await message.answer(
-                message,
                 "Не удалось найти запись. Попробуйте снова.",
                 keyboard=main_menu(is_admin=is_admin(message.from_id)),
             )
@@ -744,7 +712,6 @@ def register(bot: Bot):
         delete_booking(record)
         reset_context(message.from_id)
         await message.answer(
-            message,
             "✅ Запись отменена.",
             keyboard=main_menu(is_admin=is_admin(message.from_id)),
         )
@@ -757,7 +724,6 @@ def register(bot: Bot):
         )
         if not records:
             await message.answer(
-                message,
                 "❌ У вас нет активных записей.",
                 keyboard=main_menu(is_admin=is_admin(message.from_id)),
             )
@@ -767,7 +733,6 @@ def register(bot: Bot):
         for record in records:
             lines.append(format_booking(record))
         await message.answer(
-            message,
             "\n".join(lines),
             keyboard=main_menu(is_admin=is_admin(message.from_id)),
         )
@@ -780,7 +745,6 @@ def register(bot: Bot):
     )
     async def fallback(message: Message):
         await message.answer(
-            message,
             f"{HELP_TEXT}\n\nВыберите действие:",
             keyboard=main_menu(),
         )
