@@ -37,8 +37,8 @@ async def notification_loop(bot: Bot):
     """
     while True:
         offset = timedelta(hours=3)
-        dt = timezone(offset, name='МСК')
-        now = datetime.now(dt)
+        moscow_tz = timezone(offset, name='МСК')
+        now = datetime.now(moscow_tz)
 
         today_bookings = get_bookings(
             date=now.date(),
@@ -51,7 +51,7 @@ async def notification_loop(bot: Bot):
                 booking_start = datetime.strptime(
                     booking_time_str, "%Y-%m-%d %H:%M"
                 )
-                booking_start = booking_start.replace(tzinfo=dt)
+                booking_start = booking_start.replace(tzinfo=moscow_tz)
             except ValueError:
                 logger.warning("Неверный формат даты/времени в записи: %s", booking)
                 continue
@@ -120,6 +120,7 @@ async def notification_loop(bot: Bot):
                 booking_start = datetime.strptime(
                     booking_time_str, "%Y-%m-%d %H:%M"
                 )
+                booking_start = booking_start.replace(tzinfo=moscow_tz)
             except ValueError:
                 continue
             
