@@ -186,7 +186,7 @@ def register(bot: Bot):
     ) -> None:
         admin_info = (await message.ctx_api.users.get(message.from_id))[0]
         admin_name = f"{admin_info.first_name} {admin_info.last_name}"
-        updated = set_booking_rejected(record, admin_name, reason)
+        updated = set_booking_rejected(record, admin_name, reason) #todo удалить фичу внесения отказов в таблицу
         if persist_context:
             admin_context.pop(message.from_id, None)
         if updated is None:
@@ -205,7 +205,7 @@ def register(bot: Bot):
             f"Дата: {updated['Дата']} {updated['Время']}\n"
             f"Причина: {display_reason}",
         )
-        
+
         # Удаляем запись
         delete_booking(record)
         admin_context.pop(message.from_id, None)

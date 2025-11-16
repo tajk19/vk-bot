@@ -54,7 +54,7 @@ HELP_TEXT = (
     "• «Мои записи» — посмотреть активные брони\n"
     "• «Отмена» — отменить конкретную запись\n"
     "• «Связаться с админом» — получить контакт\n"
-    "• «Привет» или «Начать» — показать меню заново"
+    "• «Привет» или «Начать» или «Старт»  — показать меню заново"
 )
 
 
@@ -73,80 +73,80 @@ def reset_context(user_id: int) -> None:
     # Не удаляем last_bot_messages при сбросе контекста, чтобы можно было удалить последнее сообщение
 
 
-async def answer_and_delete_previous(message: Message, text: str, **kwargs) -> None:
-    """
-    Отправляет сообщение и удаляет предыдущее сообщение бота для этого пользователя.
-    """
-    user_id = message.from_id
-    peer_id = message.peer_id
+# async def answer_and_delete_previous(message: Message, text: str, **kwargs) -> None:
+#     """
+#     Отправляет сообщение и удаляет предыдущее сообщение бота для этого пользователя.
+#     """
+#     user_id = message.from_id
+#     peer_id = message.peer_id
     
-    # Удаляем предыдущее сообщение бота, если оно есть
-    if user_id in last_bot_messages:
-        try:
-            result = await message.ctx_api.messages.delete(
-                message_ids=[last_bot_messages[user_id]],
-                delete_for_all=True
-            )
-            logger.info(f"Удалено сообщение {last_bot_messages[user_id]}, результат: {result}")
-        except Exception as exc:
-            # Игнорируем ошибки удаления (сообщение могло быть уже удалено или недоступно)
-            logger.warning(f"Не удалось удалить предыдущее сообщение {last_bot_messages[user_id]}: {exc}")
+#     # Удаляем предыдущее сообщение бота, если оно есть
+#     if user_id in last_bot_messages:
+#         try:
+#             result = await message.ctx_api.messages.delete(
+#                 message_ids=[last_bot_messages[user_id]],
+#                 delete_for_all=True
+#             )
+#             logger.info(f"Удалено сообщение {last_bot_messages[user_id]}, результат: {result}")
+#         except Exception as exc:
+#             # Игнорируем ошибки удаления (сообщение могло быть уже удалено или недоступно)
+#             logger.warning(f"Не удалось удалить предыдущее сообщение {last_bot_messages[user_id]}: {exc}")
     
-    # Извлекаем keyboard из kwargs, если есть
-    keyboard = kwargs.get('keyboard')
+#     # Извлекаем keyboard из kwargs, если есть
+#     keyboard = kwargs.get('keyboard')
     
-    # Отправляем новое сообщение через API напрямую, чтобы получить message_id
-    try:
-        random_id = random.randint(0, 2**31 - 1)
+#     # Отправляем новое сообщение через API напрямую, чтобы получить message_id
+#     try:
+#         random_id = random.randint(0, 2**31 - 1)
         
-        # Подготавливаем параметры для отправки
-        send_params = {
-            "peer_id": peer_id,
-            "message": text,
-            "random_id": random_id,
-        }
+#         # Подготавливаем параметры для отправки
+#         send_params = {
+#             "peer_id": peer_id,
+#             "message": text,
+#             "random_id": random_id,
+#         }
         
-        # Добавляем keyboard, если есть
-        if keyboard:
-            # В vkbottle Keyboard имеет метод get_json() для получения JSON строки
-            if hasattr(keyboard, 'get_json'):
-                send_params["keyboard"] = keyboard.get_json()
-            elif hasattr(keyboard, 'json'):
-                send_params["keyboard"] = keyboard.json
-            else:
-                # Если keyboard - это строка, используем её напрямую
-                send_params["keyboard"] = str(keyboard)
+#         # Добавляем keyboard, если есть
+#         if keyboard:
+#             # В vkbottle Keyboard имеет метод get_json() для получения JSON строки
+#             if hasattr(keyboard, 'get_json'):
+#                 send_params["keyboard"] = keyboard.get_json()
+#             elif hasattr(keyboard, 'json'):
+#                 send_params["keyboard"] = keyboard.json
+#             else:
+#                 # Если keyboard - это строка, используем её напрямую
+#                 send_params["keyboard"] = str(keyboard)
         
-        # Отправляем сообщение
-        result = await message.ctx_api.messages.send(**send_params)
+#         # Отправляем сообщение
+#         result = await message.ctx_api.messages.send(**send_params)
         
-        # Сохраняем message_id из ответа
-        # В VK API messages.send возвращает message_id как int
-        message_id = None
-        if isinstance(result, int):
-            message_id = result
-        elif hasattr(result, 'message_id'):
-            message_id = result.message_id
-        elif isinstance(result, dict):
-            if 'message_id' in result:
-                message_id = result['message_id']
-            elif 'response' in result:
-                response = result['response']
-                if isinstance(response, int):
-                    message_id = response
-                elif isinstance(response, dict) and 'message_id' in response:
-                    message_id = response['message_id']
+#         # Сохраняем message_id из ответа
+#         # В VK API messages.send возвращает message_id как int
+#         message_id = None
+#         if isinstance(result, int):
+#             message_id = result
+#         elif hasattr(result, 'message_id'):
+#             message_id = result.message_id
+#         elif isinstance(result, dict):
+#             if 'message_id' in result:
+#                 message_id = result['message_id']
+#             elif 'response' in result:
+#                 response = result['response']
+#                 if isinstance(response, int):
+#                     message_id = response
+#                 elif isinstance(response, dict) and 'message_id' in response:
+#                     message_id = response['message_id']
         
-        if message_id:
-            last_bot_messages[user_id] = message_id
-            logger.info(f"Отправлено сообщение пользователю {user_id}, message_id: {message_id}")
-        else:
-            logger.warning(f"Не удалось получить message_id из ответа: {result}")
+#         if message_id:
+#             last_bot_messages[user_id] = message_id
+#             logger.info(f"Отправлено сообщение пользователю {user_id}, message_id: {message_id}")
+#         else:
+#             logger.warning(f"Не удалось получить message_id из ответа: {result}")
         
-    except Exception as exc:
-        logger.error(f"Ошибка при отправке сообщения: {exc}", exc_info=True)
-        # Fallback: используем обычный message.answer
-        await message.answer(text, **kwargs)
+#     except Exception as exc:
+#         logger.error(f"Ошибка при отправке сообщения: {exc}", exc_info=True)
+#         # Fallback: используем обычный message.answer
+#         await message.answer(text, **kwargs)
 
 
 def extract_payload(message: Message) -> Dict[str, Any]:
@@ -294,6 +294,7 @@ def register(bot: Bot):
     user_commands = {
         "привет",
         "начать",
+        "старт",
         "записаться",
         "отмена",
         "мои записи",
@@ -313,16 +314,16 @@ def register(bot: Bot):
         "вернуться",
     }
 
-    @bot.on.private_message(text=["привет", "начать"])
+    @bot.on.private_message(text=["привет", "начать", "старт"])
     async def greet_user(message: Message):
         if is_admin(message.from_id):
-            await answer_and_delete_previous(
+            await message.answer(
                 message,
                 "Привет! Вы в режиме администратора.",
                 keyboard=admin_menu(),
             )
         else:
-            await answer_and_delete_previous(
+            await message.answer(
                 message,
                 "Привет! Я бот для записи на стирку вещей.\n"
                 "Спасибо, что выбираешь постираться у меня! 🥺\n"
@@ -340,7 +341,7 @@ def register(bot: Bot):
         text=["связаться с админом", "Связаться с админом", "связаться с администратором"]
     )
     async def contact_admin(message: Message):
-        await answer_and_delete_previous(
+        await message.answer(
             message,
             f"Связаться с администратором: {ADMIN_CONTACT_URL}",
             keyboard=main_menu(is_admin=is_admin(message.from_id)),
@@ -352,18 +353,18 @@ def register(bot: Bot):
         user_link = f"https://vk.com/id{message.from_id}"
         blacklist = get_blacklist_sync()
         if user_link in blacklist:
-            await answer_and_delete_previous(message, "❌ Вы в черном списке и не можете записываться.")
+            await message.answer(message, "❌ Вы в черном списке и не можете записываться.")
             return
 
         # Отправляем быстрый ответ пользователю
-        await answer_and_delete_previous(message, "⏳ Загрузка доступных дат...")
+        await message.answer(message, "⏳ Загрузка доступных дат...")
         
         # Получаем активные записи
         active_bookings = get_bookings(statuses=ACTIVE_STATUSES)
         
         # Быстрая проверка доступности дат
         if not available_dates(active_bookings):
-            await answer_and_delete_previous(
+            await message.answer(
                 message,
                 "❌ Сейчас нет свободных слотов для записи.\n"
                 f"Свяжитесь с администратором: {ADMIN_CONTACT_URL}",
@@ -377,7 +378,7 @@ def register(bot: Bot):
             "step": "choose_date",
             "active_bookings": active_bookings,
         }
-        await answer_and_delete_previous(
+        await message.answer(
             message,
             "Выберите дату для записи:",
             keyboard=date_keyboard(active_bookings=active_bookings),
@@ -395,7 +396,7 @@ def register(bot: Bot):
 
         if payload.get("action") == "back_to_menu":
             reset_context(message.from_id)
-            await answer_and_delete_previous(
+            await message.answer(
                 message,
                 "Главное меню:",
                 keyboard=main_menu(is_admin=is_admin(message.from_id)),
@@ -404,7 +405,7 @@ def register(bot: Bot):
 
         if payload.get("action") == "paginate" and payload.get("target") == "date":
             page = payload.get("page", 0)
-            await answer_and_delete_previous(
+            await message.answer(
                 message,
                 "Выберите дату для записи:",
                 keyboard=date_keyboard(page, active_bookings=active_bookings),
@@ -419,7 +420,7 @@ def register(bot: Bot):
         try:
             selected_date = datetime.strptime(date_text, DATE_FORMAT).date()
         except ValueError:
-            await answer_and_delete_previous(
+            await message.answer(
                 message,
                 "❌ Пожалуйста, выберите дату с клавиатуры.",
                 keyboard=date_keyboard(active_bookings=active_bookings),
@@ -427,7 +428,7 @@ def register(bot: Bot):
             return
 
         if selected_date not in booking_window_dates():
-            await answer_and_delete_previous(
+            await message.answer(
                 message,
                 "❌ Эту дату выбрать нельзя. Попробуйте другую:",
                 keyboard=date_keyboard(active_bookings=active_bookings),
@@ -436,7 +437,7 @@ def register(bot: Bot):
 
         free_times, keyboard = time_keyboard(selected_date, active_bookings=active_bookings)
         if not free_times:
-            await answer_and_delete_previous(
+            await message.answer(
                 message,
                 "❌ На выбранную дату нет свободных слотов.\n"
                 "Выберите другую дату или свяжитесь с администратором.",
@@ -446,7 +447,7 @@ def register(bot: Bot):
 
         user_context[message.from_id]["date"] = selected_date
         user_context[message.from_id]["step"] = "choose_time"
-        await answer_and_delete_previous(
+        await message.answer(
             message,
             f"Дата *{selected_date.strftime(DATE_FORMAT)}* выбрана. Теперь выберите время:",
             keyboard=keyboard,
@@ -459,7 +460,7 @@ def register(bot: Bot):
         context = user_context.get(message.from_id)
         if not context or "date" not in context:
             reset_context(message.from_id)
-            await answer_and_delete_previous(
+            await message.answer (
                 message,
                 "Сессия бронирования сброшена. Начните заново командой «Записаться».",
                 keyboard=main_menu(is_admin=is_admin(message.from_id)),
@@ -475,7 +476,7 @@ def register(bot: Bot):
 
         if payload.get("action") == "back_to_menu":
             reset_context(message.from_id)
-            await answer_and_delete_previous(
+            await message.answer(
                 message,
                 "Главное меню:",
                 keyboard=main_menu(is_admin=is_admin(message.from_id)),
@@ -485,7 +486,7 @@ def register(bot: Bot):
         if payload.get("action") == "paginate" and payload.get("target") == "time":
             page = payload.get("page", 0)
             _, keyboard = time_keyboard(selected_date, active_bookings, page)
-            await answer_and_delete_previous(
+            await message.answer(
                 message,
                 "Выберите время:",
                 keyboard=keyboard,
@@ -501,7 +502,7 @@ def register(bot: Bot):
             datetime.strptime(time_text, TIME_FORMAT)
         except ValueError:
             _, keyboard = time_keyboard(selected_date, active_bookings)
-            await answer_and_delete_previous(
+            await message.answer(
                 message,
                 "❌ Пожалуйста, выберите время с клавиатуры.",
                 keyboard=keyboard,
@@ -510,7 +511,7 @@ def register(bot: Bot):
 
         if not is_time_free(selected_date, time_text):
             _, keyboard = time_keyboard(selected_date, active_bookings)
-            await answer_and_delete_previous(
+            await message.answer(
                 message,
                 "❌ Слот уже занят. Выберите другое время:",
                 keyboard=keyboard,
@@ -524,7 +525,7 @@ def register(bot: Bot):
         ]
         if len(bookings_same_day) >= MAX_SLOTS_PER_DAY:
             reset_context(message.from_id)
-            await answer_and_delete_previous(
+            await message.answer(
                 message,
                 "❌ Вы достигли лимита бронирований на выбранную дату.",
                 keyboard=main_menu(is_admin=is_admin(message.from_id)),
@@ -534,7 +535,7 @@ def register(bot: Bot):
         context["time"] = time_text
         context["step"] = "choose_options"
         context["options"] = []
-        await answer_and_delete_previous(
+        await message.answer(
             message,
             "Выберите дополнительные опции (по желанию):",
             keyboard=wash_options_keyboard(WASH_OPTIONS, []),
@@ -547,7 +548,7 @@ def register(bot: Bot):
         context = user_context.get(message.from_id)
         if not context or "date" not in context or "time" not in context:
             reset_context(message.from_id)
-            await answer_and_delete_previous(
+            await message.answer(
                 message,
                 "Сессия бронирования сброшена. Начните заново командой «Записаться».",
                 keyboard=main_menu(is_admin=is_admin(message.from_id)),
@@ -561,7 +562,7 @@ def register(bot: Bot):
         
         if action == "back_to_menu":
             reset_context(message.from_id)
-            await answer_and_delete_previous(
+            await message.answer(
                 message,
                 "Главное меню:",
                 keyboard=main_menu(is_admin=is_admin(message.from_id)),
@@ -578,7 +579,7 @@ def register(bot: Bot):
                 else:
                     selected_options.append(option_value)
             context["options"] = selected_options
-            await answer_and_delete_previous(
+            await message.answer(
                 message,
                 "Обновлённые опции:",
                 keyboard=wash_options_keyboard(WASH_OPTIONS, selected_options),
@@ -587,7 +588,7 @@ def register(bot: Bot):
 
         if action == "options_reset":
             selected_options.clear()
-            await answer_and_delete_previous(
+            await message.answer(
                 message,
                 "Опции сброшены.",
                 keyboard=wash_options_keyboard(WASH_OPTIONS, selected_options),
@@ -596,7 +597,7 @@ def register(bot: Bot):
 
         if action == "options_cancel":
             reset_context(message.from_id)
-            await answer_and_delete_previous(
+            await message.answer(
                 message,
                 "Выбор отменён.",
                 keyboard=main_menu(is_admin=is_admin(message.from_id)),
@@ -604,7 +605,7 @@ def register(bot: Bot):
             return
 
         if action != "options_done":
-            await answer_and_delete_previous(
+            await message.answer(
                 message,
                 "Используйте кнопки, чтобы выбрать опции, или нажмите «Готово».",
                 keyboard=wash_options_keyboard(WASH_OPTIONS, selected_options),
@@ -615,7 +616,7 @@ def register(bot: Bot):
         time_text: str = context["time"]
         if not is_time_free(selected_date, time_text):
             reset_context(message.from_id)
-            await answer_and_delete_previous(
+            await message.answer(
                 message,
                 "❌ Пока вы выбирали опции, слот заняли. Попробуйте снова.",
                 keyboard=main_menu(is_admin=is_admin(message.from_id)),
@@ -658,7 +659,7 @@ def register(bot: Bot):
                 )
 
         reset_context(message.from_id)
-        await answer_and_delete_previous(
+        await message.answer(
             message,
             "✅ Заявка отправлена на подтверждение администратору.\n"
             "Вносите оплату по номеру - +79842878451 (альфа банк) и ждите подтверждения\n"
@@ -671,7 +672,7 @@ def register(bot: Bot):
         reset_context(message.from_id)
         bookings = get_user_active_bookings(message.from_id)
         if not bookings:
-            await answer_and_delete_previous(
+            await message.answer(
                 message,
                 "❌ У вас нет активных записей.",
                 keyboard=main_menu(is_admin=is_admin(message.from_id)),
@@ -685,7 +686,7 @@ def register(bot: Bot):
         user_context[message.from_id] = context
 
         details = "\n".join(format_booking(record) for record in bookings)
-        await answer_and_delete_previous(
+        await message.answer(
             message,
             "Выберите запись для отмены:\n"
             f"{details}",
@@ -702,7 +703,7 @@ def register(bot: Bot):
 
         if action == "back_to_menu":
             reset_context(message.from_id)
-            await answer_and_delete_previous(
+            await message.answer(
                 message,
                 "Главное меню:",
                 keyboard=main_menu(is_admin=is_admin(message.from_id)),
@@ -711,7 +712,7 @@ def register(bot: Bot):
 
         if action == "cancel_abort":
             reset_context(message.from_id)
-            await answer_and_delete_previous(
+            await message.answer(
                 message,
                 "Отмена бронирования прервана.",
                 keyboard=main_menu(is_admin=is_admin(message.from_id)),
@@ -719,7 +720,7 @@ def register(bot: Bot):
             return
 
         if action != "cancel_booking":
-            await answer_and_delete_previous(
+            await message.answer(
                 message,
                 "Выберите запись кнопкой на клавиатуре или нажмите «Отмена».",
                 keyboard=cancellation_keyboard(
@@ -733,7 +734,7 @@ def register(bot: Bot):
         record = bookings_map.get(row_key)
         if not record:
             reset_context(message.from_id)
-            await answer_and_delete_previous(
+            await message.answer(
                 message,
                 "Не удалось найти запись. Попробуйте снова.",
                 keyboard=main_menu(is_admin=is_admin(message.from_id)),
@@ -742,7 +743,7 @@ def register(bot: Bot):
 
         delete_booking(record)
         reset_context(message.from_id)
-        await answer_and_delete_previous(
+        await message.answer(
             message,
             "✅ Запись отменена.",
             keyboard=main_menu(is_admin=is_admin(message.from_id)),
@@ -755,7 +756,7 @@ def register(bot: Bot):
             key=lambda r: (r["Дата"], r["Время"]),
         )
         if not records:
-            await answer_and_delete_previous(
+            await message.answer(
                 message,
                 "❌ У вас нет активных записей.",
                 keyboard=main_menu(is_admin=is_admin(message.from_id)),
@@ -765,7 +766,7 @@ def register(bot: Bot):
         lines = ["📋 Ваши записи:"]
         for record in records:
             lines.append(format_booking(record))
-        await answer_and_delete_previous(
+        await message.answer(
             message,
             "\n".join(lines),
             keyboard=main_menu(is_admin=is_admin(message.from_id)),
@@ -778,7 +779,7 @@ def register(bot: Bot):
         and normalize(m.text) not in user_commands
     )
     async def fallback(message: Message):
-        await answer_and_delete_previous(
+        await message.answer(
             message,
             f"{HELP_TEXT}\n\nВыберите действие:",
             keyboard=main_menu(),
