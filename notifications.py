@@ -82,7 +82,7 @@ async def notification_loop(bot: Bot):
                     await _send(bot, user_peer, message_user)
                 await _notify_admins(bot, message_admin)
 
-            notify_after_time = booking_start + datetime.timedelta(
+            notify_after_time = booking_start + timedelta(
                 minutes=WASH_DURATION_MIN + NOTIFY_AFTER_MIN
             )
             diff_after = (now - notify_after_time).total_seconds()
@@ -124,7 +124,7 @@ async def notification_loop(bot: Bot):
                 continue
             
             # Удаляем записи, которые прошли более чем на WASH_DURATION_MIN + NOTIFY_AFTER_MIN минут
-            booking_end_time = booking_start + datetime.timedelta(
+            booking_end_time = booking_start + timedelta(
                 minutes=WASH_DURATION_MIN + NOTIFY_AFTER_MIN
             )
             if now > booking_end_time:
