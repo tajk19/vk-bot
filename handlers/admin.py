@@ -549,7 +549,7 @@ def register(bot: Bot):
         step = context.get("step")
         link = message.text
         if step == "blacklist_add":
-            await add_blacklist(bot, link)
+            await add_blacklist(bot.api, link)
             admin_context.pop(message.from_id, None)
             await message.answer(f"✅ Пользователь {link} добавлен в черный список.")
         elif step == "blacklist_remove":
