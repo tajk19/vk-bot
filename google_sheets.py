@@ -336,7 +336,7 @@ def is_time_free(date: datetime.date, time_slot: str) -> bool:
 def get_user_active_bookings(user_id: int) -> List[Dict[str, str]]:
     return get_bookings(
         user_id=user_id,
-        statuses={STATUS_PENDING, STATUS_CONFIRMED},
+        statuses=ACTIVE_STATUSES,
     )
 
 
