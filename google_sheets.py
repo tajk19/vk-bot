@@ -3,7 +3,7 @@
 Обеспечивает взаимодействие с таблицами для хранения записей, расписания и черного списка.
 Использует кеширование для оптимизации производительности.
 """
-import datetime
+from datetime import datetime
 import logging
 import re
 from typing import Dict, Iterable, List, Optional
@@ -108,7 +108,7 @@ logger = logging.getLogger(__name__)
 # Проверка изменений в Google Sheets
 # -------------------------
 
-def _get_sheet_modified_time() -> Optional[datetime.datetime]:
+def _get_sheet_modified_time() -> Optional[datetime]:
     """
     Получает время последнего изменения таблицы через Drive API.
     
@@ -130,14 +130,14 @@ def _get_sheet_modified_time() -> Optional[datetime.datetime]:
             # Парсим время в формате ISO 8601
             # Убираем 'Z' и добавляем '+00:00' для правильного парсинга
             modified_time_str = modified_time_str.replace("Z", "+00:00")
-            return datetime.datetime.fromisoformat(modified_time_str)
+            return datetime.fromisoformat(modified_time_str)
     except Exception as e:
         logger.warning(f"Не удалось получить время изменения таблицы: {e}")
     return None
 
 
 # Храним время последнего изменения таблицы
-_last_modified_time: Optional[datetime.datetime] = None
+_last_modified_time: Optional[datetime] = None
 
 
 def check_sheet_changes() -> None:
@@ -299,7 +299,7 @@ def add_booking(
         "Время": time_slot,
         "Статус": status,
         "Пользователь_ID": str(user_id) if user_id is not None else "",
-        "Создано": datetime.datetime.utcnow().isoformat(),
+        "Создано": datetime.now().isoformat(),
         "Опция стирки": wash_option,
         "Подтвердил": confirmed_by,
         "Подтверждено в": confirmed_at,
@@ -349,7 +349,7 @@ def get_admin_blockings() -> List[Dict[str, str]]:
 
 
 def set_booking_confirmed(record: Dict[str, str], admin_name: str) -> Dict[str, str]:
-    now = datetime.datetime.utcnow().isoformat()
+    now = datetime.now().isoformat()
     return update_booking(
         record,
         {
@@ -374,7 +374,7 @@ def set_booking_rejected(
             {
                 "Статус": STATUS_REJECTED,
                 "Подтвердил": admin_name,
-                "Подтверждено в": datetime.datetime.utcnow().isoformat(),
+                "Подтверждено в": datetime.now().isoformat(),
                 "Причина отказа": reason,
             },
         )
