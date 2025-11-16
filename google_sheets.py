@@ -21,7 +21,7 @@ from cache import (
     invalidate_bookings_cache,
     invalidate_schedule_cache,
 )
-from config import SPREADSHEET_NAME
+from config import SPREADSHEET_NAME, DATE_FORMAT, TIME_FORMAT
 
 # Путь к JSON-файлу сервисного аккаунта Google
 SERVICE_ACCOUNT_FILE = "credentials.json"
@@ -295,7 +295,7 @@ def add_booking(
     record = {
         "Пользователь": user_name,
         "Ссылка": user_link,
-        "Дата": str(date),
+        "Дата": str(date.strftime(DATE_FORMAT)),
         "Время": time_slot,
         "Статус": status,
         "Пользователь_ID": str(user_id) if user_id is not None else "",

@@ -209,6 +209,7 @@ def free_times_for_date(
         bookings = [
             booking for booking in active_bookings if booking.get("Дата") == date_str
         ]
+    test_data = active_bookings[0].get("Дата")
     existing = {booking["Время"] for booking in bookings}
 
     offset = timedelta(hours=3)
