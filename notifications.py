@@ -51,6 +51,7 @@ async def notification_loop(bot: Bot):
                 booking_start = datetime.strptime(
                     booking_time_str, "%Y-%m-%d %H:%M"
                 )
+                booking_start = booking_start.replace(tzinfo=dt)
             except ValueError:
                 logger.warning("Неверный формат даты/времени в записи: %s", booking)
                 continue
