@@ -205,6 +205,10 @@ def register(bot: Bot):
             f"Дата: {updated['Дата']} {updated['Время']}\n"
             f"Причина: {display_reason}",
         )
+        
+        # Удаляем запись
+        delete_booking(record)
+        admin_context.pop(message.from_id, None)
 
     @bot.on.private_message(text=["Админ меню"])
     async def show_admin_menu(message: Message):
