@@ -166,21 +166,48 @@ def unblock_keyboard(blockings: Sequence[dict]) -> Keyboard:
     return keyboard
 
 
-def booking_list_keyboard(bookings: Sequence[dict]) -> Keyboard:
+def booking_list_keyboard(bookings: Sequence[dict], page: int = 0, page_size: int = 8) -> Keyboard:
     """
-    Клавиатура для списка записей с возможностью завершить запись.
+    Клавиатура для списка записей с пагинацией.
     """
     keyboard = Keyboard(inline=True)
-    for booking in bookings:
+    
+    # Рассчитываем элементы для текущей страницы
+    start_idx = page * page_size
+    end_idx = start_idx + page_size
+    page_bookings = bookings[start_idx:end_idx]
+    
+    # Добавляем кнопки записей текущей страницы
+    for booking in page_bookings:
         label = f"{booking['Дата']} {booking['Время']} - {booking['Пользователь']}"
         keyboard.add(
             Text(
                 label,
-                payload={"action": "admin_complete_booking", "row": booking["_row"]},
+                payload={"action": "admin_complete_booking", "row": booking["_row"]}
             )
         )
         keyboard.row()
+    
+    # Добавляем кнопки пагинации
+    has_prev = page > 0
+    has_next = end_idx < len(bookings)
+    
+    if has_prev or has_next:
+        if has_prev:
+            keyboard.add(
+                Text("← Назад", payload={"action": "booking_list_page", "page": page - 1})
+            )
+        
+        if has_next:
+            keyboard.add(
+                Text("Вперед →", payload={"action": "booking_list_page", "page": page + 1})
+            )
+        
+        keyboard.row()
+    
+    # Кнопка возврата
     keyboard.add(Text("Вернуться", payload={"action": "back_to_menu"}))
+    
     return keyboard
 
 

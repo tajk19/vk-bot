@@ -232,12 +232,17 @@ def register(bot: Bot):
     @bot.on.private_message(
         func=lambda m: admin_context.get(m.from_id, {}).get("step") == "booking_list"
     )
-    async def handle_booking_list_selection(message: Message):
+    async def handle_booking_list_selection(message: Message, page: int = 0):
         if not is_admin(message):
             return
+        
         payload = extract_payload(message)
         action = payload.get("action")
-        context = admin_context.get(message.from_id, {})
+        
+        # Обработка пагинации
+        if action == "booking_list_page":
+            await handle_booking_list_page(message, payload.get("page", 0))
+            return
         
         if action == "back_to_menu":
             admin_context.pop(message.from_id, None)
@@ -247,43 +252,82 @@ def register(bot: Bot):
             )
             return
         
+        # Получаем ВСЕ записи для контекста
+        all_bookings = get_bookings()  # Твоя функция получения всех записей
+        
         if action != "admin_complete_booking":
-            bookings = list(context.get("bookings", {}).values())
-            await message.answer(
-                "Используйте кнопки клавиатуры, чтобы выбрать запись.",
-                keyboard=booking_list_keyboard(bookings),
-            )
+            # Сохраняем все записи в контекст для последующего использования
+            context = admin_context.get(message.from_id, {})
+            context["all_bookings"] = all_bookings
+            admin_context[message.from_id] = context
+            
+            # Показываем первую страницу
+            await show_booking_page(message, all_bookings, page)
             return
         
+        # Обработка завершения записи
         row_key = str(payload.get("row"))
-        record = context.get("bookings", {}).get(row_key)
-        if not record:
+        
+        # Ищем запись во всех бронированиях
+        target_booking = None
+        for booking in all_bookings:
+            if str(booking.get("_row")) == row_key:
+                target_booking = booking
+                break
+        
+        if not target_booking:
             admin_context.pop(message.from_id, None)
             await message.answer("Не удалось найти запись. Попробуйте снова.")
             return
         
         # Отправляем уведомление клиенту
-        user_id = record.get("Пользователь_ID")
+        user_id = target_booking.get("Пользователь_ID")
         if user_id:
             try:
                 await send_user_notification(
                     user_id,
                     f"✅ Ваша стирка завершена!\n"
-                    f"Дата: {record['Дата']} {record['Время']}\n"
+                    f"Дата: {target_booking['Дата']} {target_booking['Время']}\n"
                     f"Спасибо, что воспользовались нашими услугами!",
                 )
             except Exception as exc:
                 logger.warning(f"Не удалось отправить уведомление пользователю {user_id}: {exc}")
         
         # Удаляем запись
-        complete_booking(record)
+        complete_booking(target_booking)
         admin_context.pop(message.from_id, None)
         
         await message.answer(
             f"✅ Запись завершена и удалена из таблицы.\n"
-            f"Клиент {record.get('Пользователь', 'неизвестен')} уведомлен.",
+            f"Клиент {target_booking.get('Пользователь', 'неизвестен')} уведомлен.",
             keyboard=main_menu(is_admin),
         )
+
+    async def handle_booking_list_page(message: Message, page: int):
+        """Обработчик смены страницы"""
+        if not is_admin(message):
+            return
+        
+        # Получаем все записи из контекста или заново
+        context = admin_context.get(message.from_id, {})
+        all_bookings = context.get("all_bookings", get_bookings())
+        
+        await show_booking_page(message, all_bookings, page)
+
+    async def show_booking_page(message: Message, all_bookings: list, page: int):
+        """Показывает страницу с записями"""
+        keyboard = booking_list_keyboard(all_bookings, page=page)
+        total_pages = max(1, (len(all_bookings) + 7) // 8)  # Округление вверх
+        
+        text = f"Список записей (страница {page + 1} из {total_pages}):\nИспользуйте кнопки для выбора записи."
+        
+        await message.answer(text, keyboard=keyboard)
+        
+        # Обновляем контекст
+        context = admin_context.get(message.from_id, {})
+        context["all_bookings"] = all_bookings
+        context["current_page"] = page
+        admin_context[message.from_id] = context
 
     @bot.on.private_message(text=["Неподтвержденные"])
     async def pending_list(message: Message):
