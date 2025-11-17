@@ -49,7 +49,7 @@ async def notification_loop(bot: Bot):
             booking_time_str = f"{booking['Дата']} {booking['Время']}"
             try:
                 booking_start = datetime.strptime(
-                    booking_time_str, "%Y-%m-%d %H:%M"
+                    booking_time_str, "%d-%m-%y %H:%M"
                 )
                 booking_start = booking_start.replace(tzinfo=moscow_tz)
             except ValueError:
