@@ -12,7 +12,7 @@ from vkbottle.bot import Bot
 
 from cache import get_cache
 from config import ADMIN_IDS, NOTIFY_AFTER_MIN, NOTIFY_BEFORE_MIN, WASH_DURATION_MIN
-from google_sheets import STATUS_CONFIRMED, check_sheet_changes, complete_booking, get_bookings
+from google_sheets import STATUS_CONFIRMED, ACTIVE_STATUSES, check_sheet_changes, complete_booking, get_bookings
 
 logger = logging.getLogger(__name__)
 
@@ -107,10 +107,10 @@ async def notification_loop(bot: Bot):
         
         # Удаляем прошедшие записи (которые уже прошли более чем на WASH_DURATION_MIN + NOTIFY_AFTER_MIN минут)
         # Проверяем все подтвержденные записи, не только за сегодня
-        all_confirmed = get_bookings(statuses={STATUS_CONFIRMED})
+        all_bookings = get_bookings(statuses=ACTIVE_STATUSES)
         processed_today_ids = {booking.get("_row") for booking in today_bookings}
         
-        for booking in all_confirmed:
+        for booking in all_bookings:
             # Пропускаем записи за сегодня, они уже обработаны выше
             if booking.get("_row") in processed_today_ids:
                 continue
