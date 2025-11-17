@@ -166,11 +166,11 @@ def unblock_keyboard(blockings: Sequence[dict]) -> Keyboard:
     return keyboard
 
 
-def booking_list_keyboard(bookings: Sequence[dict], page: int = 0, page_size: int = 8) -> Keyboard:
+def booking_list_keyboard(bookings: Sequence[dict], page: int = 0, page_size: int = 6) -> Keyboard:
     """
     Клавиатура для списка записей с пагинацией.
     """
-    keyboard = Keyboard(inline=True)
+    keyboard = Keyboard(inline=False)
     
     # Рассчитываем элементы для текущей страницы
     start_idx = page * page_size
