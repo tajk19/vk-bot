@@ -1,0 +1,6 @@
+.git
+.venv
+credentials.json
+.__pycache__
+amvera.yml
+.env
