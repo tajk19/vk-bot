@@ -164,7 +164,9 @@ def extract_payload(message: Message) -> Dict[str, Any]:
 
 
 def booking_window_dates() -> List[datetime.date]:
-    today = datetime.today().date()
+    offset = timedelta(hours=3)
+    dt = timezone(offset, name='МСК')
+    today = datetime.now(dt).date().strftime(DATE_FORMAT)
     start_of_week = today - timedelta(days=today.weekday())
     dates = [start_of_week + timedelta(days=i) for i in range(14)]
     return [date for date in dates if date >= today]
