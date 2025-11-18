@@ -21,7 +21,7 @@ from cache import (
     invalidate_bookings_cache,
     invalidate_schedule_cache,
 )
-from config import SPREADSHEET_NAME, DATE_FORMAT, TIME_FORMAT
+from config import SPREADSHEET_NAME, DATE_FORMAT
 
 # Путь к JSON-файлу сервисного аккаунта Google
 SERVICE_ACCOUNT_FILE = "credentials.json"
@@ -251,8 +251,13 @@ def get_bookings(
     # Загружаем все бронирования из кеша или из таблицы
     def loader():
         return _fetch_records(list_sheet)
+    
+    if date: 
+        date.strftime(DATE_FORMAT)
+        date_str = str(date)
+    else:
+        date_str = None
 
-    date_str = str(date) if date else None
     statuses_tuple = tuple(statuses) if statuses else None
 
     all_records = get_cached_bookings(
@@ -292,14 +297,16 @@ def add_booking(
         confirmed_at: Время подтверждения (по умолчанию пустая строка)
         decline_reason: Причина отказа (по умолчанию пустая строка)
     """
+
+    date.strftime(DATE_FORMAT)
     record = {
         "Пользователь": user_name,
         "Ссылка": user_link,
-        "Дата": str(date.strftime(DATE_FORMAT)),
+        "Дата": str(date),
         "Время": time_slot,
         "Статус": status,
         "Пользователь_ID": str(user_id) if user_id is not None else "",
-        "Создано": datetime.now().isoformat(),
+        "Создано": str(date),
         "Опция стирки": wash_option,
         "Подтвердил": confirmed_by,
         "Подтверждено в": confirmed_at,

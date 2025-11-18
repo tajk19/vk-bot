@@ -67,6 +67,7 @@ def wash_options_keyboard(
     """
     selected_set = set(selected)
     keyboard = Keyboard(inline=True)
+    count = 0
     for option in options:
         is_selected = (
             not selected_set if option.lower().startswith("без") else option in selected_set
@@ -78,7 +79,10 @@ def wash_options_keyboard(
                 payload={"action": "toggle_option", "value": option},
             )
         )
-        keyboard.row()
+        if count % 2 == 0:
+            keyboard.row()
+        count += 1
+
     keyboard.add(Text("Готово", payload={"action": "options_done"}))
     keyboard.add(Text("Сбросить", payload={"action": "options_reset"}))
     keyboard.row()
