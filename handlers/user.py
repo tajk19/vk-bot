@@ -25,6 +25,8 @@ from config import (
     MAX_SLOTS_PER_DAY,
     SLOT_INTERVAL_MIN,
     TIME_FORMAT,
+    WASH_OPTIONS,
+    WASH_PRICES,
 )
 from google_sheets import (
     ACTIVE_STATUSES,
@@ -46,7 +48,6 @@ from keyboards import (
     wash_options_keyboard,
 )
 
-WASH_OPTIONS = ["Без добавок", "Отбеливатель", "Порошок", "Кондиционер", "Гель"]
 
 HELP_TEXT = (
     "Доступные команды:\n"
@@ -167,6 +168,7 @@ def booking_window_dates() -> List[datetime.date]:
     offset = timedelta(hours=3)
     dt = timezone(offset, name='МСК')
     today = datetime.now(dt).date()
+    today.strftime(DATE_FORMAT)
     start_of_week = today - timedelta(days=today.weekday())
     dates = [start_of_week + timedelta(days=i) for i in range(14)]
     return [date for date in dates if date >= today]
@@ -211,7 +213,6 @@ def free_times_for_date(
         bookings = [
             booking for booking in active_bookings if booking.get("Дата") == date_str
         ]
-    test_data = active_bookings[0].get("Дата")
     existing = {booking["Время"] for booking in bookings}
 
     offset = timedelta(hours=3)
@@ -521,9 +522,10 @@ def register(bot: Bot):
         context["time"] = time_text
         context["step"] = "choose_options"
         context["options"] = []
+        context["price"] = WASH_PRICES["Без добавок"]
         await message.answer(
             "Выберите дополнительные опции (по желанию):",
-            keyboard=wash_options_keyboard(WASH_OPTIONS, []),
+            keyboard=wash_options_keyboard(WASH_OPTIONS, context["price"], []),
         )
 
     @bot.on.private_message(
@@ -554,25 +556,29 @@ def register(bot: Bot):
         
         if action == "toggle_option":
             option_value = payload.get("value")
+
             if option_value == WASH_OPTIONS[0]:
                 selected_options.clear()
             elif option_value in WASH_OPTIONS[1:]:
                 if option_value in selected_options:
                     selected_options.remove(option_value)
+                    context["price"] -= WASH_PRICES[option_value]
                 else:
                     selected_options.append(option_value)
+                    context["price"] += WASH_PRICES[option_value]
             context["options"] = selected_options
             await message.answer(
                 "Обновлённые опции:",
-                keyboard=wash_options_keyboard(WASH_OPTIONS, selected_options),
+                keyboard=wash_options_keyboard(WASH_OPTIONS, context["price"], selected_options),
             )
             return
 
         if action == "options_reset":
             selected_options.clear()
+            context["price"] = WASH_PRICES["Без добавок"]
             await message.answer(
                 "Опции сброшены.",
-                keyboard=wash_options_keyboard(WASH_OPTIONS, selected_options),
+                keyboard=wash_options_keyboard(WASH_OPTIONS, context["price"], selected_options),
             )
             return
 
@@ -606,6 +612,7 @@ def register(bot: Bot):
         user_link = f"https://vk.com/id{message.from_id}"
 
         wash_option = ", ".join(selected_options) if selected_options else "Без добавок"
+        price = context["price"]
 
         add_booking(
             user_name=full_name,
@@ -622,6 +629,7 @@ def register(bot: Bot):
             f"Пользователь: {full_name} ({user_link})\n"
             f"Дата и время: {selected_date.strftime(DATE_FORMAT)} {time_text}\n"
             f"Опции: {wash_option}\n"
+            f"Итоговая стоимость: {price}\n" 
             f"ID пользователя: {message.from_id}"
         )
         for admin_id in ADMIN_IDS:

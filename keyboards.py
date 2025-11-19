@@ -6,6 +6,8 @@ from typing import Iterable, Sequence
 
 from vkbottle import Keyboard, Text
 
+from config import WASH_PRICES
+
 
 def main_menu(is_admin: bool = False) -> Keyboard:
     """
@@ -53,6 +55,7 @@ def admin_menu() -> Keyboard:
 
 def wash_options_keyboard(
     options: Sequence[str],
+    price: int,
     selected: Iterable[str],
 ) -> Keyboard:
     """
@@ -72,7 +75,12 @@ def wash_options_keyboard(
         is_selected = (
             not selected_set if option.lower().startswith("без") else option in selected_set
         )
-        label = f"✅ {option}" if is_selected else option
+        
+        if option == "Без добавок":
+            label = f"✅ {option}" if is_selected else option
+        else:
+            label = f"✅ {option} -{WASH_PRICES[option]} руб." if is_selected else f"{option} +{WASH_PRICES[option]} руб."
+
         keyboard.add(
             Text(
                 label,
@@ -83,7 +91,7 @@ def wash_options_keyboard(
             keyboard.row()
         count += 1
 
-    keyboard.add(Text("Готово", payload={"action": "options_done"}))
+    keyboard.add(Text(f"Готово - {price} руб.", payload={"action": "options_done"}))
     keyboard.add(Text("Сбросить", payload={"action": "options_reset"}))
     keyboard.row()
     keyboard.add(Text("Отмена", payload={"action": "options_cancel"}))

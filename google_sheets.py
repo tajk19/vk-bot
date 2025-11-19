@@ -297,16 +297,15 @@ def add_booking(
         confirmed_at: Время подтверждения (по умолчанию пустая строка)
         decline_reason: Причина отказа (по умолчанию пустая строка)
     """
-
-    date.strftime(DATE_FORMAT)
+    date_str = str(datetime.strftime(date, DATE_FORMAT))
     record = {
         "Пользователь": user_name,
         "Ссылка": user_link,
-        "Дата": str(date),
+        "Дата": date_str,
         "Время": time_slot,
         "Статус": status,
         "Пользователь_ID": str(user_id) if user_id is not None else "",
-        "Создано": str(date),
+        "Создано": date_str,
         "Опция стирки": wash_option,
         "Подтвердил": confirmed_by,
         "Подтверждено в": confirmed_at,
