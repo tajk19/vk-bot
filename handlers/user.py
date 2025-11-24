@@ -299,6 +299,7 @@ def register(bot: Bot):
         "привет",
         "начать",
         "старт",
+        "start",
         "записаться",
         "отмена",
         "мои записи",
@@ -306,7 +307,7 @@ def register(bot: Bot):
         "связаться с администратором",
     }
 
-    @bot.on.private_message(text=["привет", "начать", "старт"])
+    @bot.on.private_message(text=["привет", "начать", "старт", "start"])
     async def greet_user(message: Message):
         if is_admin(message.from_id):
             await message.answer(
