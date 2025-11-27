@@ -124,9 +124,9 @@ async def notification_loop(bot: Bot):
             except ValueError:
                 continue
             
-            # Удаляем записи, которые прошли более чем на WASH_DURATION_MIN + NOTIFY_AFTER_MIN минут
+            # Удаляем записи, которые прошли более чем на NOTIFY_AFTER_MIN минут
             booking_end_time = booking_start + timedelta(
-                minutes=WASH_DURATION_MIN + NOTIFY_AFTER_MIN
+                minutes=NOTIFY_AFTER_MIN
             )
             if now > booking_end_time:
                 try:
