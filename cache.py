@@ -39,6 +39,7 @@ class CacheEntry:
 
 
 class Cache:
+
     """
     Thread-safe кеш для данных из Google Sheets.
     Использует threading.Lock для обеспечения безопасности при одновременном доступе.
@@ -61,60 +62,29 @@ class Cache:
         loader: Optional[Callable[[], Any]] = None,
         ttl: Optional[float] = None,
     ) -> Any:
-        """
-        Получает данные из кеша или загружает их, если кеш пуст или истек.
-
-        Args:
-            key: Ключ кеша
-            loader: Функция для загрузки данных, если кеш пуст
-            ttl: Время жизни кеша в секундах (используется default_ttl, если None)
-
-        Returns:
-            Данные из кеша или загруженные данные
-        """
+        
         with self._lock:
             entry = self._cache.get(key)
-
-            # Проверяем, есть ли валидный кеш
             if entry and not entry.is_expired():
-                logger.debug(f"Кеш HIT для ключа: {key}")
                 return entry.data
 
-            # Кеш пуст или истек, загружаем данные
-            if loader is None:
-                if entry:
-                    logger.debug(f"Кеш EXPIRED для ключа: {key}")
-                else:
-                    logger.debug(f"Кеш MISS для ключа: {key}")
-                return None
+        if loader is None:
+            return entry.data if entry else None
 
-            logger.debug(f"Загрузка данных для ключа: {key}")
-            try:
-                data = loader()
-                ttl_to_use = ttl if ttl is not None else self.default_ttl
-                self._cache[key] = CacheEntry(data, ttl_to_use)
-                return data
-            except Exception as exc:
-                logger.error(f"Ошибка при загрузке данных для ключа {key}: {exc}")
-                # Возвращаем старые данные, если они есть, даже если истекли
-                if entry:
-                    logger.warning(f"Используем устаревшие данные для ключа: {key}")
-                    return entry.data
-                raise
+        # Выполняем loader вне lock
+        try:
+            data = loader()
+        except Exception as e:
+            if entry:
+                return entry.data  # fallback на старые данные
+            raise
 
-    def set(self, key: str, data: Any, ttl: Optional[float] = None) -> None:
-        """
-        Устанавливает значение в кеш.
-
-        Args:
-            key: Ключ кеша
-            data: Данные для кеширования
-            ttl: Время жизни кеша в секундах (используется default_ttl, если None)
-        """
+        # Сохраняем результат в кеш под lock
         with self._lock:
             ttl_to_use = ttl if ttl is not None else self.default_ttl
             self._cache[key] = CacheEntry(data, ttl_to_use)
-            logger.debug(f"Установлен кеш для ключа: {key}")
+
+        return data
 
     def invalidate(self, key: Optional[str] = None) -> None:
         """

@@ -4,6 +4,7 @@
 Использует кеширование для оптимизации производительности.
 """
 from datetime import datetime
+import time
 import logging
 import re
 from typing import Dict, Iterable, List, Optional
@@ -252,6 +253,21 @@ def get_bookings(
     def loader():
         return _fetch_records(list_sheet)
     
+    def with_retries(loader, retries=5, base_delay=0.5):
+        def wrapped():
+            delay = base_delay
+            for attempt in range(retries):
+                try:
+                    return loader()
+                except Exception as e:
+                    if attempt == retries - 1:
+                        raise
+                    time.sleep(delay)
+                    delay *= 2
+            return loader()
+        return wrapped
+
+    
     if date: 
         date_str = str(date.strftime(DATE_FORMAT))
     else:
@@ -260,7 +276,7 @@ def get_bookings(
     statuses_tuple = tuple(statuses) if statuses else None
 
     all_records = get_cached_bookings(
-        loader=loader,
+        loader=with_retries(loader),
         date=date_str,
         user_id=user_id,
         statuses=statuses_tuple,
