@@ -566,7 +566,7 @@ def register(bot: Bot):
         blacklist = await get_blacklist(bot.api)
         if blacklist:
             for user in blacklist:
-                await message.answer(f"https://vk.com/id{user}")
+                await message.answer(user)
         else:
             await message.answer("Черный список пуст")
 

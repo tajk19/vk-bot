@@ -105,6 +105,22 @@ _ensure_header(schedule_sheet, SCHEDULE_HEADER)
 logger = logging.getLogger(__name__)
 
 
+def with_retries(loader, retries=5, base_delay=0.5):
+    def wrapped():
+        delay = base_delay
+        for attempt in range(retries):
+            try:
+                return loader()
+            except Exception as e:
+                if attempt == retries - 1:
+                    raise
+                time.sleep(delay)
+                delay *= 2
+        return loader()
+    return wrapped
+
+
+
 # -------------------------
 # Проверка изменений в Google Sheets
 # -------------------------
@@ -252,21 +268,6 @@ def get_bookings(
     # Загружаем все бронирования из кеша или из таблицы
     def loader():
         return _fetch_records(list_sheet)
-    
-    def with_retries(loader, retries=5, base_delay=0.5):
-        def wrapped():
-            delay = base_delay
-            for attempt in range(retries):
-                try:
-                    return loader()
-                except Exception as e:
-                    if attempt == retries - 1:
-                        raise
-                    time.sleep(delay)
-                    delay *= 2
-            return loader()
-        return wrapped
-
     
     if date: 
         date_str = str(date.strftime(DATE_FORMAT))
@@ -433,7 +434,7 @@ def time_of_begining(idx: int) -> Optional[int]:
     def loader():
         return _fetch_records(schedule_sheet)
 
-    records = get_cached_schedule(loader)
+    records = get_cached_schedule(with_retries(loader))
     dict_weekdays = {
         0: "понедельник",
         1: "вторник",
@@ -464,7 +465,7 @@ def time_of_end(idx: int) -> Optional[int]:
     def loader():
         return _fetch_records(schedule_sheet)
 
-    records = get_cached_schedule(loader)
+    records = get_cached_schedule(with_retries(loader))
     dict_weekdays = {
         0: "понедельник",
         1: "вторник",
@@ -547,7 +548,7 @@ def get_blacklist_sync() -> List[str]:
         values = blacklist_sheet.get_all_values()
         return [row[0] for row in values[1:] if row and row[0].strip()]
 
-    return get_cached_blacklist(loader)
+    return get_cached_blacklist(with_retries(loader))
 
 
 async def get_blacklist(api: API) -> List[str]:

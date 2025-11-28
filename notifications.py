@@ -82,28 +82,28 @@ async def notification_loop(bot: Bot):
                     await _send(bot, user_peer, message_user)
                 await _notify_admins(bot, message_admin)
 
-            notify_after_time = booking_start + timedelta(
-                minutes=WASH_DURATION_MIN + NOTIFY_AFTER_MIN
-            )
-            diff_after = (now - notify_after_time).total_seconds()
-            if 0 <= diff_after < 60:
-                message_user = (
-                    f"✅ Ваша стирка завершена.\n"
-                    f"Дата: {booking['Дата']} {booking['Время']}"
-                )
-                message_admin = (
-                    f"✅ Стирка пользователя {booking['Пользователь']} завершена "
-                    f"({booking['Дата']} {booking['Время']})."
-                )
-                if user_peer is not None:
-                    await _send(bot, user_peer, message_user)
-                await _notify_admins(bot, message_admin)
+            # notify_after_time = booking_start + timedelta(
+            #     minutes=WASH_DURATION_MIN + NOTIFY_AFTER_MIN
+            # )
+            # diff_after = (now - notify_after_time).total_seconds()
+            # if 0 <= diff_after < 60:
+            #     message_user = (
+            #         f"✅ Ваша стирка завершена.\n"
+            #         f"Дата: {booking['Дата']} {booking['Время']}"
+            #     )
+            #     message_admin = (
+            #         f"✅ Стирка пользователя {booking['Пользователь']} завершена "
+            #         f"({booking['Дата']} {booking['Время']})."
+            #     )
+            #     if user_peer is not None:
+            #         await _send(bot, user_peer, message_user)
+            #     await _notify_admins(bot, message_admin)
                 
-                # Удаляем запись после уведомления
-                try:
-                    complete_booking(booking)
-                except Exception as exc:
-                    logger.warning("Не удалось удалить завершенную запись %s: %s", booking, exc)
+            #     # Удаляем запись после уведомления
+            #     try:
+            #         complete_booking(booking)
+            #     except Exception as exc:
+            #         logger.warning("Не удалось удалить завершенную запись %s: %s", booking, exc)
         
         # Удаляем прошедшие записи (которые уже прошли более чем на WASH_DURATION_MIN + NOTIFY_AFTER_MIN минут)
         # Проверяем все подтвержденные записи, не только за сегодня
