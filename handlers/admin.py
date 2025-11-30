@@ -354,10 +354,8 @@ def register(bot: Bot):
         if not is_admin(message):
             return
         # Показываем только подтвержденные записи для завершения
-        records = sorted(
-            get_bookings(statuses={STATUS_CONFIRMED}),
-            key=lambda r: (r["Дата"], r["Время"]),
-        )
+        records = get_bookings(statuses={STATUS_CONFIRMED})
+
         if not records:
             await message.answer(
                 "Список подтвержденных записей пуст.",

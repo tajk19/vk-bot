@@ -6,6 +6,7 @@
 import logging
 import threading
 import time
+from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -242,6 +243,13 @@ def get_cached_bookings(
     if statuses:
         statuses_set = set(statuses)
         filtered = [b for b in filtered if b.get("Статус") in statuses_set]
+
+    filtered.sort(
+        key=lambda r: datetime.strptime(
+            r.get("Дата").strip() + " " + r.get("Время").strip(),
+            "%d-%m-%y %H:%M"
+        )
+    )
 
     return filtered
 
