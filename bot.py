@@ -22,7 +22,8 @@ from vkbottle.bot import Bot
 
 from cache import init_cache
 from config import CACHE_TTL, VK_TOKEN
-from handlers import admin, user
+from handlers.admin import Admin
+from handlers.user import User
 from notifications import notification_loop
 
 logging.basicConfig(
@@ -39,11 +40,13 @@ init_cache(default_ttl=CACHE_TTL)
 
 # Создаем объект бота
 bot = Bot(token=VK_TOKEN)
-bot.labeler.vbml_ignore_case = True
+#bot.labeler.vbml_ignore_case = True
 
 # Регистрируем обработчики команд
-user.register(bot)
-admin.register(bot)
+
+
+user = User(bot)
+admin = Admin(bot)
 
 
 async def main():

@@ -9,18 +9,14 @@ from vkbottle import Keyboard, Text
 from config import WASH_PRICES
 
 
-def main_menu(is_admin: bool = False) -> Keyboard:
+def user_menu() -> Keyboard:
     """
     Создает главное меню для пользователя или администратора.
-    
-    Args:
-        is_admin: Если True, возвращает админ-меню, иначе пользовательское меню
         
     Returns:
-        Keyboard объект с кнопками главного меню
+        Keyboard объект с кнопками юзер-меню
     """
-    if is_admin:
-        return admin_menu()
+
     keyboard = Keyboard(one_time=True, inline=False)
     keyboard.add(Text("Записаться"))
     keyboard.add(Text("Мои записи"))
@@ -178,49 +174,56 @@ def unblock_keyboard(blockings: Sequence[dict]) -> Keyboard:
     return keyboard
 
 
-def booking_list_keyboard(bookings: Sequence[dict], page: int = 0, page_size: int = 6) -> Keyboard:
+
+def booking_list_keyboard(
+    bookings: Sequence[dict],
+    page: int = 0,
+    buttons_per_row: int = 1,
+    rows_per_page: int = 5,
+) -> Keyboard:
     """
     Клавиатура для списка записей с пагинацией.
     """
-    keyboard = Keyboard(inline=False)
+    start_idx = page * buttons_per_row * rows_per_page
+    end_idx = start_idx + buttons_per_row * rows_per_page
+    page_items = bookings[start_idx:end_idx]
     
-    # Рассчитываем элементы для текущей страницы
-    start_idx = page * page_size
-    end_idx = start_idx + page_size
-    page_bookings = bookings[start_idx:end_idx]
-    
-    # Добавляем кнопки записей текущей страницы
-    for booking in page_bookings:
-        label = f"{booking['Дата']} {booking['Время']} - {booking['Пользователь']}"
+    keyboard = Keyboard(one_time=True, inline=False)
+    for idx, item in enumerate(page_items):
+        label = f"{item['Дата']} {item['Время']} - {item['Пользователь']}"
         keyboard.add(
             Text(
                 label,
-                payload={"action": "admin_complete_booking", "row": booking["_row"]}
+                payload={"action": "admin_complete_booking", "row": item["_row"]},
             )
         )
         keyboard.row()
+        
     
-    # Добавляем кнопки пагинации
-    has_prev = page > 0
+    has_prev = start_idx > 0
     has_next = end_idx < len(bookings)
-    
+
     if has_prev or has_next:
         if has_prev:
             keyboard.add(
-                Text("← Назад", payload={"action": "booking_list_page", "page": page - 1})
+                Text(
+                    "← Назад",
+                    payload={"action": "booking_list_page", "page": page - 1},
+                )
             )
-        
         if has_next:
             keyboard.add(
-                Text("Вперед →", payload={"action": "booking_list_page", "page": page + 1})
+                Text(
+                    "Следующие →",
+                    payload={"action": "booking_list_page", "page": page + 1},
+                )
             )
-        
         keyboard.row()
-    
-    # Кнопка возврата
+
     keyboard.add(Text("Вернуться", payload={"action": "back_to_menu"}))
-    
+         
     return keyboard
+
 
 
 def paginate_buttons(

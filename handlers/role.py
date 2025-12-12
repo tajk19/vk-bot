@@ -3,7 +3,7 @@ import logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone 
 from typing import Any, Dict, List, Optional
-from vkbottle.bot import Message, BotLabeler
+from vkbottle.bot import Message, BotLabeler, Bot
 
 from config import (
     ADMIN_IDS,
@@ -21,8 +21,6 @@ from keyboards import(
 )
 
 class Role():
-    
-    labeler = BotLabeler()
     
     logger = logging.getLogger(__name__)
     
@@ -43,8 +41,8 @@ class Role():
                 return {}
         return {}
     
-    def is_admin(self, user_id: int) -> bool:
-        return user_id in ADMIN_IDS
+    def is_admin(self, message: Message) -> bool:
+        return message.from_id in ADMIN_IDS
 
     def normalize(self, text: Optional[str]) -> str:
         return (text or "").strip().lower()
@@ -126,7 +124,7 @@ class Role():
     def format_booking(self, record: Dict[str, str]) -> str:
         option = record.get("Опция стирки") or "Без добавок"
         status = record.get("Статус", "")
-        return f"{record['Дата']} {record['Время']} — {status} ({option})"
+        return f"{record['Дата']} {record['Время']} — {record['Пользователь']}/{record['Ссылка']}\n({option})\n"
 
     def date_keyboard(
         self,
