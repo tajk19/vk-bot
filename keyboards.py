@@ -44,8 +44,6 @@ def admin_menu() -> Keyboard:
     keyboard.row()
     keyboard.add(Text("+ в черный список"))
     keyboard.add(Text("- из черного списка"))
-    keyboard.row()
-    keyboard.add(Text("Вернуться"))
     return keyboard
 
 
@@ -90,6 +88,7 @@ def wash_options_keyboard(
     keyboard.add(Text(f"Готово - {price} руб.", payload={"action": "options_done"}))
     keyboard.add(Text("Сбросить", payload={"action": "options_reset"}))
     keyboard.row()
+    keyboard.add(Text("Назад", payload={"action": "one_step_back"}))
     keyboard.add(Text("Вернуться в главное меню", payload={"action": "back_to_menu"}))
     return keyboard
 
@@ -144,8 +143,6 @@ def pending_decision_keyboard(row: int) -> Keyboard:
             payload={"action": "admin_reject", "row": row},
         )
     )
-    keyboard.row()
-    keyboard.add(Text("Вернуться в главное меню", payload={"action": "back_to_menu"}))
     return keyboard
 
 
@@ -247,8 +244,8 @@ def paginate_buttons(
 
     keyboard = Keyboard(one_time=True, inline=False)
     for idx, item in enumerate(page_items):
-        payload = {"action": "select", "target": target, "value": str(item)}
-        keyboard.add(Text(str(item), payload=payload))
+        payload = {"action": "select", "target": target, "value": item}
+        keyboard.add(Text(item, payload=payload))
         is_row_end = (idx + 1) % buttons_per_row == 0
         has_more_buttons = idx + 1 < len(page_items)
         if is_row_end and has_more_buttons:

@@ -247,7 +247,7 @@ def get_cached_bookings(
     filtered.sort(
         key=lambda r: datetime.strptime(
             r.get("Дата").strip() + " " + r.get("Время").strip(),
-            "%d-%m-%y %H:%M"
+            "%d.%m.%y %H:%M"
         )
     )
 

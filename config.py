@@ -3,6 +3,7 @@
 Загружает настройки из переменных окружения и предоставляет константы для использования в других модулях.
 """
 import os
+from datetime import date, datetime
 from pathlib import Path
 
 try:
@@ -40,8 +41,11 @@ WASH_DURATION_MIN = int(os.getenv("WASH_DURATION_MIN", "60"))
 NOTIFY_BEFORE_MIN = int(os.getenv("NOTIFY_BEFORE_MIN", "10"))
 NOTIFY_AFTER_MIN = int(os.getenv("NOTIFY_AFTER_MIN", "60"))
 
-DATE_FORMAT = "%d-%m-%y"
+
+WEEKDAYS_SHORT_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+DATE_FORMAT = "%d.%m.%y"
 TIME_FORMAT = "%H:%M"
+
 
 WASH_OPTIONS = ["Без добавок", "Отбеливатель", "Порошок", "Кондиционер", "Гель"]
 WASH_PRICES = {"Без добавок": 90, "Отбеливатель": 20, "Порошок": 15, "Кондиционер": 20, "Гель": 20} 
@@ -50,3 +54,15 @@ WASH_PRICES = {"Без добавок": 90, "Отбеливатель": 20, "П�
 CACHE_TTL = int(os.getenv("CACHE_TTL", "300"))  # 5 минут по умолчанию
 # Интервал проверки изменений в Google Sheets (в секундах)
 SHEET_CHECK_INTERVAL = int(os.getenv("SHEET_CHECK_INTERVAL", "60"))  # 1 минута по умолчанию
+
+
+def format_date_with_weekday(d: date) -> str:
+    return f"{WEEKDAYS_SHORT_RU[d.weekday()]} - {d.strftime(DATE_FORMAT)}"
+
+def convert_from_format_with_weekday(value: str) -> date:
+    date_part = value.split("-")[1].strip()
+
+    return datetime.strptime(
+        date_part,
+        "%d.%m.%y"
+    ).date()

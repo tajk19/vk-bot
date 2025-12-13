@@ -20,10 +20,11 @@ from config import (
     ADMIN_IDS,
     DATE_FORMAT,
     MAX_SLOTS_PER_DAY,
-
     TIME_FORMAT,
     WASH_OPTIONS,
     WASH_PRICES,
+    format_date_with_weekday,
+    convert_from_format_with_weekday,
 )
 from google_sheets import (
     ACTIVE_STATUSES,
@@ -36,7 +37,6 @@ from google_sheets import (
     is_time_free,
 )
 from keyboards import (
-    admin_menu,
     cancellation_keyboard,
     user_menu,
     wash_options_keyboard,
@@ -58,10 +58,6 @@ class User(Role):
         "• «Связаться с админом» — получить контакт\n"
         "• «Привет» или «Начать» или «Старт»  — показать меню заново"
     )
-
-    def reset_context(self, user_id: int) -> None:
-        self.context.pop(user_id, None)
-
 
     # Храним ID последних сообщений бота для каждого пользователя
     # last_bot_messages: Dict[int, int] = {}
@@ -205,11 +201,12 @@ class User(Role):
         async def handle_date(message: Message):
             payload = self.extract_payload(message)
             active_bookings = self.context[message.from_id].get("active_bookings")
+            action = payload.get("action")
             if active_bookings is None:
                 active_bookings = get_bookings(statuses=ACTIVE_STATUSES)
                 self.context[message.from_id]["active_bookings"] = active_bookings
 
-            if payload.get("action") == "back_to_menu":
+            if action == "back_to_menu":
                 self.reset_context(message.from_id)
                 await message.answer(
                     "Главное меню:",
@@ -217,21 +214,21 @@ class User(Role):
                 )
                 return
 
-            if payload.get("action") == "paginate" and payload.get("target") == "date":
+            if action == "paginate" and payload.get("target") == "date":
                 page = payload.get("page", 0)
                 await message.answer(
                     "Выберите дату для записи:",
-                    keyboard=self.date_keyboard(page, active_bookings=active_bookings),
+                    keyboard=self.date_keyboard(page=page, active_bookings=active_bookings),
                 )
                 return
 
-            if payload.get("action") == "select" and payload.get("target") == "date":
+            if action == "select" and payload.get("target") == "date":
                 date_text = payload.get("value")
             else:
                 date_text = message.text.strip()
 
             try:
-                selected_date = datetime.strptime(date_text, DATE_FORMAT).date()
+                selected_date = convert_from_format_with_weekday(date_text)
             except ValueError:
                 await message.answer(
                     "❌ Пожалуйста, выберите дату с клавиатуры.",
@@ -246,7 +243,7 @@ class User(Role):
                 )
                 return
 
-            free_times, keyboard = self.time_keyboard(selected_date, active_bookings=active_bookings)
+            free_times, keyboard = self.time_keyboard(selected_date=selected_date)
             if not free_times:
                 await message.answer(
                     "❌ На выбранную дату нет свободных слотов.\n"
@@ -258,7 +255,7 @@ class User(Role):
             self.context[message.from_id]["date"] = selected_date
             self.context[message.from_id]["step"] = "choose_time"
             await message.answer(
-                f"Дата *{selected_date.strftime(DATE_FORMAT)}* выбрана. Теперь выберите время:",
+                f"Дата *{format_date_with_weekday(selected_date)}* выбрана. Теперь выберите время:",
                 keyboard=keyboard,
             )
 
@@ -276,14 +273,15 @@ class User(Role):
                 )
                 return
 
-            selected_date = context["date"]
+            selected_date: datetime.date = context["date"]
             payload = self.extract_payload(message)
+            action = payload.get("action")
             active_bookings = context.get("active_bookings")
             if active_bookings is None:
                 active_bookings = get_bookings(statuses=ACTIVE_STATUSES)
                 context["active_bookings"] = active_bookings
 
-            if payload.get("action") == "back_to_menu":
+            if action == "back_to_menu":
                 self.reset_context(message.from_id)
                 await message.answer(
                     "Главное меню:",
@@ -291,26 +289,26 @@ class User(Role):
                 )
                 return
             
-            if payload.get("action") == "one_step_back":
+            if action == "one_step_back" and context["step"]:
                 self.context[message.from_id].pop("date")
                 self.context[message.from_id]["step"] = "choose_date"
                 page = 0
                 await message.answer(
                     "Выберите дату для записи:",
-                    keyboard=self.date_keyboard(page, active_bookings=active_bookings),
+                    keyboard=self.date_keyboard(page=page, active_bookings=active_bookings),
                 )
                 return
                 
-            if payload.get("action") == "paginate" and payload.get("target") == "time":
+            if action == "paginate" and payload.get("target") == "time":
                 page = payload.get("page", 0)
-                _, keyboard = self.time_keyboard(selected_date, active_bookings, page)
+                _, keyboard = self.time_keyboard(selected_date=selected_date, page=page)
                 await message.answer(
                     "Выберите время:",
                     keyboard=keyboard,
                 )
                 return
 
-            if payload.get("action") == "select" and payload.get("target") == "time":
+            if action == "select" and payload.get("target") == "time":
                 time_text = payload.get("value")
             else:
                 time_text = message.text.strip()
@@ -318,7 +316,7 @@ class User(Role):
             try:
                 datetime.strptime(time_text, TIME_FORMAT)
             except ValueError:
-                _, keyboard = self.time_keyboard(selected_date, active_bookings)
+                _, keyboard = self.time_keyboard(selected_date=selected_date)
                 await message.answer(
                     "❌ Пожалуйста, выберите время с клавиатуры.",
                     keyboard=keyboard,
@@ -326,7 +324,7 @@ class User(Role):
                 return
 
             if not is_time_free(selected_date, time_text):
-                _, keyboard = self.time_keyboard(selected_date, active_bookings)
+                _, keyboard = self.time_keyboard(selected_date=selected_date)
                 await message.answer(
                     "❌ Слот уже занят. Выберите другое время:",
                     keyboard=keyboard,
@@ -336,7 +334,7 @@ class User(Role):
             bookings_same_day = [
                 record
                 for record in get_user_active_bookings(message.from_id)
-                if record.get("Дата") == selected_date.strftime(DATE_FORMAT)
+                if record.get("Дата") == selected_date
             ]
             if len(bookings_same_day) >= MAX_SLOTS_PER_DAY:
                 self.reset_context(message.from_id)
@@ -371,7 +369,7 @@ class User(Role):
 
             payload = self.extract_payload(message)
             selected_options: List[str] = context.get("options", [])
-
+            selected_date: datetime.date = context["date"]   
             action = payload.get("action")
             
             if action == "back_to_menu":
@@ -379,6 +377,19 @@ class User(Role):
                 await message.answer(
                     "Главное меню:",
                     keyboard=user_menu(),
+                )
+                return
+            
+            if action == "one_step_back":
+                self.context[message.from_id].pop("time")
+                self.context[message.from_id]["step"] = "choose_time"
+                self.context[message.from_id].pop("options") 
+                self.context[message.from_id].pop("price")
+
+                page = 0
+                await message.answer(
+                    "Выберите дату для записи:",
+                    keyboard=self.time_keyboard(page=page, selected_date=selected_date),
                 )
                 return
             
@@ -426,7 +437,6 @@ class User(Role):
                 )
                 return
 
-            selected_date: datetime.date = context["date"]
             time_text: str = context["time"]
             if not is_time_free(selected_date, time_text):
                 self.reset_context(message.from_id)
@@ -456,7 +466,7 @@ class User(Role):
             admin_message = (
                 "🆕 Новая заявка на стирку\n"
                 f"Пользователь: {full_name} ({user_link})\n"
-                f"Дата и время: {selected_date.strftime(DATE_FORMAT)} {time_text}\n"
+                f"Дата и время: {format_date_with_weekday(selected_date)} {time_text}\n"
                 f"Опции: {wash_option}\n"
                 f"Итоговая стоимость: {price}\n" 
                 f"ID пользователя: {message.from_id}"

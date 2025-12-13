@@ -7,8 +7,8 @@ from vkbottle.bot import Message, BotLabeler, Bot
 
 from config import (
     ADMIN_IDS,
-    DATE_FORMAT,
     SLOT_INTERVAL_MIN,
+    format_date_with_weekday,
 )
 from google_sheets import (
     get_bookings,
@@ -27,6 +27,7 @@ class Role():
     commands = {}
     
     context: Dict[int, Dict[str, Any]] = defaultdict(dict)
+    
     
     def extract_payload(self, message: Message) -> Dict[str, Any]:
         payload = message.payload
@@ -50,6 +51,10 @@ class Role():
     def normalize(self, text: Optional[str]) -> str:
         return (text or "").strip().lower()
     
+    def reset_context(self, id: int) -> None:
+        self.context.pop(id, None)
+    
+    
     def all_time_slots(self         ) -> List[str]:
         return [
             f"{minutes // 60:02d}:{minutes % 60:02d}"
@@ -64,7 +69,7 @@ class Role():
         if active_bookings is None:
             bookings = get_bookings(date=selected_date, statuses=ACTIVE_STATUSES)
         else:
-            date_str = selected_date.strftime(DATE_FORMAT)
+            date_str = format_date_with_weekday(selected_date)
             bookings = [
                 booking for booking in active_bookings if booking.get("Дата") == date_str
             ]
@@ -126,7 +131,6 @@ class Role():
 
     def format_booking(self, record: Dict[str, str]) -> str:
         option = record.get("Опция стирки") or "Без добавок"
-        status = record.get("Статус", "")
         return f"{record['Дата']} {record['Время']} — {record['Пользователь']}/{record['Ссылка']}\n({option})\n"
 
     def date_keyboard(
@@ -141,7 +145,7 @@ class Role():
                 for date in dates
                 if self.free_times_for_date(date, active_bookings)
             ]
-        formatted = [date.strftime(DATE_FORMAT) for date in dates]
+        formatted = [format_date_with_weekday(date) for date in dates]
         return paginate_buttons(
             formatted,
             target="date",
