@@ -118,16 +118,6 @@ class Admin(Role):
                 "Админ меню:",
                 keyboard=admin_menu(),
             )
-
-        @self.labeler.private_message(text=["Вернуться"])
-        async def back_to_main(message: Message):
-            if not self.is_admin(message):
-                return
-            await message.answer(
-                "Админ меню:",
-                keyboard=admin_menu(),
-            )
-            self.context.pop(message.from_id, None)
         
         @self.labeler.private_message(
             func=lambda m: self.context.get(m.from_id, {}).get("step") == "booking_list"
@@ -306,11 +296,13 @@ class Admin(Role):
             if not self.is_admin(message):
                 return
             payload = self.extract_payload(message)
+            context = self.context.get(message.from_id)
+            active_bookings = context.get("active_bookings")
             if payload.get("action") == "paginate" and payload.get("target") == "admin_date":#вроде костыль какой-то
                 page = payload.get("page", 0)
                 await message.answer(
                     "Выберите дату для блокировки:",
-                    keyboard=self.date_keyboard(page),
+                    keyboard=self.date_keyboard(active_bookings, page),
                 )
                 return
 
@@ -344,10 +336,21 @@ class Admin(Role):
                 return
             context = self.context.get(message.from_id)
             payload = self.extract_payload(message)
+            active_bookings = context.get("active_bookings")
             selected_date = context.get("date")
             if not selected_date:
                 self.context.pop(message.from_id, None)
                 await message.answer("Сессия прервана. Начните заново.")
+                return
+            
+            if payload.get("action") == "one_step_back":
+                self.context[message.from_id].pop("date")
+                self.context[message.from_id]["step"] = "choose_date"
+                page = 0
+                await message.answer(
+                    "Выберите дату для записи:",
+                    keyboard=self.date_keyboard(page, active_bookings=active_bookings),
+                )
                 return
 
             if payload.get("action") == "paginate" and payload.get("target") == "admin_time":

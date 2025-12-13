@@ -21,7 +21,7 @@ def user_menu() -> Keyboard:
     keyboard.add(Text("Записаться"))
     keyboard.add(Text("Мои записи"))
     keyboard.row()
-    keyboard.add(Text("Отмена"))
+    keyboard.add(Text("Отменить запись"))
     keyboard.add(Text("Связаться с админом"))
     return keyboard
 
@@ -90,8 +90,7 @@ def wash_options_keyboard(
     keyboard.add(Text(f"Готово - {price} руб.", payload={"action": "options_done"}))
     keyboard.add(Text("Сбросить", payload={"action": "options_reset"}))
     keyboard.row()
-    keyboard.add(Text("Отмена", payload={"action": "options_cancel"}))
-    keyboard.add(Text("Вернуться", payload={"action": "back_to_menu"}))
+    keyboard.add(Text("Вернуться в главное меню", payload={"action": "back_to_menu"}))
     return keyboard
 
 
@@ -118,7 +117,7 @@ def cancellation_keyboard(bookings: Sequence[dict]) -> Keyboard:
             )
         )
         keyboard.row()
-    keyboard.add(Text("Вернуться", payload={"action": "back_to_menu"}))
+    keyboard.add(Text("Вернуться в главное меню", payload={"action": "back_to_menu"}))
     return keyboard
 
 
@@ -146,7 +145,7 @@ def pending_decision_keyboard(row: int) -> Keyboard:
         )
     )
     keyboard.row()
-    keyboard.add(Text("Вернуться", payload={"action": "back_to_menu"}))
+    keyboard.add(Text("Вернуться в главное меню", payload={"action": "back_to_menu"}))
     return keyboard
 
 
@@ -170,7 +169,7 @@ def unblock_keyboard(blockings: Sequence[dict]) -> Keyboard:
             )
         )
         keyboard.row()
-    keyboard.add(Text("Вернуться", payload={"action": "back_to_menu"}))
+    keyboard.add(Text("Вернуться в главное меню", payload={"action": "back_to_menu"}))
     return keyboard
 
 
@@ -207,7 +206,7 @@ def booking_list_keyboard(
         if has_prev:
             keyboard.add(
                 Text(
-                    "← Назад",
+                    "← Предыдущие",
                     payload={"action": "booking_list_page", "page": page - 1},
                 )
             )
@@ -220,7 +219,7 @@ def booking_list_keyboard(
             )
         keyboard.row()
 
-    keyboard.add(Text("Вернуться", payload={"action": "back_to_menu"}))
+    keyboard.add(Text("Вернуться в главное меню", payload={"action": "back_to_menu"}))
          
     return keyboard
 
@@ -263,7 +262,7 @@ def paginate_buttons(
         if has_prev:
             keyboard.add(
                 Text(
-                    "← Назад",
+                    "← Предыдущие",
                     payload={"action": "paginate", "target": target, "page": page - 1},
                 )
             )
@@ -275,5 +274,7 @@ def paginate_buttons(
                 )
             )
     keyboard.row()
-    keyboard.add(Text("Вернуться", payload={"action": "back_to_menu"}))
+    if target == "time":
+        keyboard.add(Text("Назад", payload={"action": "one_step_back"}))
+    keyboard.add(Text("Вернуться в главное меню", payload={"action": "back_to_menu"}))
     return keyboard

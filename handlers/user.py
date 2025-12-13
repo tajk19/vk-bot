@@ -54,14 +54,14 @@ class User(Role):
         "Доступные команды:\n"
         "• «Записаться» — выбрать дату, время и опции\n"
         "• «Мои записи» — посмотреть активные брони\n"
-        "• «Отмена» — отменить конкретную запись\n"
+        "• «Отменить запись» — отменить конкретную запись\n"
         "• «Связаться с админом» — получить контакт\n"
         "• «Привет» или «Начать» или «Старт»  — показать меню заново"
     )
 
     def reset_context(self, user_id: int) -> None:
         self.context.pop(user_id, None)
-        # Не удаляем last_bot_messages при сбросе контекста, чтобы можно было удалить последнее сообщение
+
 
     # Храним ID последних сообщений бота для каждого пользователя
     # last_bot_messages: Dict[int, int] = {}
@@ -150,11 +150,11 @@ class User(Role):
             "старт",
             "start",
             "записаться",
-            "отмена",
+            "отменить запись",
             "мои записи",
             "связаться с админом",
             "связаться с администратором",
-            "вернуться",
+            "вернуться в меню",
             "назад"
         }
 
@@ -173,7 +173,7 @@ class User(Role):
                     "90 рублей - стирка со своим порошком🤌\n"
                     "Допы: с моим порошком +15 руб, с моим гелем, кондиционером или отбеливателем +20 руб 💥\n"
                     "+79842878451 альфа банк 💸\n"
-                    "11 этаж 297 комната 😶‍🌫️\n"
+                    "11 этаж 297 комната. Во 2 корпусе!!! 😶‍🌫️\n"
                     "Приноси заранее за 5-10 минут, оставляй на пороге(внутри), стучаться не надо❗❗❗\n\n\n"
                 )
                 await message.answer(
@@ -213,7 +213,7 @@ class User(Role):
                 )
                 return
 
-            # Сохраняем контекст и отправляем клавиатуру с датами
+            # Сначала отчищаем, потом сохраняем контекст и отправляем клавиатуру с датами
             self.reset_context(message.from_id)
             self.context[message.from_id] = {
                 "step": "choose_date",
@@ -314,7 +314,17 @@ class User(Role):
                     keyboard=user_menu(),
                 )
                 return
-
+            
+            if payload.get("action") == "one_step_back":
+                self.context[message.from_id].pop("date")
+                self.context[message.from_id]["step"] = "choose_date"
+                page = 0
+                await message.answer(
+                    "Выберите дату для записи:",
+                    keyboard=self.date_keyboard(page, active_bookings=active_bookings),
+                )
+                return
+                
             if payload.get("action") == "paginate" and payload.get("target") == "time":
                 page = payload.get("page", 0)
                 _, keyboard = self.time_keyboard(selected_date, active_bookings, page)
@@ -398,8 +408,9 @@ class User(Role):
             if action == "toggle_option":
                 option_value = payload.get("value")
 
-                if option_value == WASH_OPTIONS[0]:
+                if option_value == WASH_PRICES["Без добавок"]:
                     selected_options.clear()
+                    context["price"] = WASH_PRICES["Без добавок"]
                 elif option_value in WASH_OPTIONS[1:]:
                     if option_value in selected_options:
                         selected_options.remove(option_value)
@@ -493,7 +504,7 @@ class User(Role):
                 keyboard=user_menu(),
             )
 
-        @self.labeler.private_message(text=["отмена"])
+        @self.labeler.private_message(text=["отменить запись"])
         async def cancel_booking(message: Message):
             self.reset_context(message.from_id)
             bookings = get_user_active_bookings(message.from_id)
