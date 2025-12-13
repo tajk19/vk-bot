@@ -43,6 +43,9 @@ class Role():
     
     def is_admin(self, message: Message) -> bool:
         return message.from_id in ADMIN_IDS
+    
+    def is_user(self, message: Message) -> bool:
+        return message.from_id not in ADMIN_IDS
 
     def normalize(self, text: Optional[str]) -> str:
         return (text or "").strip().lower()

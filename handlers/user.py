@@ -145,10 +145,6 @@ class User(Role):
     def register(self, bot: Bot):
 
         user_commands = {
-            "привет",
-            "начать",
-            "старт",
-            "start",
             "записаться",
             "отменить запись",
             "мои записи",
@@ -158,30 +154,8 @@ class User(Role):
             "назад"
         }
 
-        @self.labeler.private_message(text=["привет", "начать", "старт", "start"])
-        async def greet_user(message: Message):
-            if self.is_admin(message):
-                await message.answer(
-                    "Привет! Вы в режиме администратора.",
-                    keyboard=admin_menu(),
-                )
-            else:
-                await message.answer(
-                    "Привет! Я бот для записи на стирку вещей.\n"
-                    "Спасибо, что выбираешь постираться у меня! 🥺\n"
-                    "Вот такие расценки:\n"
-                    "90 рублей - стирка со своим порошком🤌\n"
-                    "Допы: с моим порошком +15 руб, с моим гелем, кондиционером или отбеливателем +20 руб 💥\n"
-                    "+79842878451 альфа банк 💸\n"
-                    "11 этаж 297 комната. Во 2 корпусе!!! 😶‍🌫️\n"
-                    "Приноси заранее за 5-10 минут, оставляй на пороге(внутри), стучаться не надо❗❗❗\n\n\n"
-                )
-                await message.answer(
-                    f"{self.HELP_TEXT}\nВыберите действие:",
-                    keyboard=user_menu())
-
         @self.labeler.private_message(
-            text=["связаться с админом", "Связаться с админом", "связаться с администратором"]
+            text=["связаться с админом", "связаться с администратором"]
         )
         async def contact_admin(message: Message):
             await message.answer(
@@ -189,7 +163,7 @@ class User(Role):
                 keyboard=user_menu(),
             )
 
-        @self.labeler.private_message(text=["записаться"])
+        @self.labeler.private_message(text=["записаться"], func=self.is_user)
         async def start_booking(message: Message):
             # Быстрая проверка черного списка (синхронная, без await)
             user_link = f"https://vk.com/id{message.from_id}"
@@ -226,6 +200,7 @@ class User(Role):
 
         @self.labeler.private_message(
             func=lambda m: self.context.get(m.from_id, {}).get("step") == "choose_date"
+            and self.is_user(m)
         )
         async def handle_date(message: Message):
             payload = self.extract_payload(message)
@@ -289,6 +264,7 @@ class User(Role):
 
         @self.labeler.private_message(
             func=lambda m: self.context.get(m.from_id, {}).get("step") == "choose_time"
+            and self.is_user(m)
         )
         async def handle_time(message: Message):
             context = self.context.get(message.from_id)
@@ -381,6 +357,7 @@ class User(Role):
 
         @self.labeler.private_message(
             func=lambda m: self.context.get(m.from_id, {}).get("step") == "choose_options"
+            and self.is_user(m)
         )
         async def handle_options(message: Message):
             context = self.context.get(message.from_id)
@@ -504,7 +481,7 @@ class User(Role):
                 keyboard=user_menu(),
             )
 
-        @self.labeler.private_message(text=["отменить запись"])
+        @self.labeler.private_message(text=["отменить запись"], func=self.is_user)
         async def cancel_booking(message: Message):
             self.reset_context(message.from_id)
             bookings = get_user_active_bookings(message.from_id)
@@ -530,6 +507,7 @@ class User(Role):
 
         @self.labeler.private_message(
             func=lambda m: self.context.get(m.from_id, {}).get("step") == "cancel_select"
+            and self.is_user(m)
         )
         async def handle_cancel_selection(message: Message):
             context = self.context.get(message.from_id, {})
@@ -579,7 +557,7 @@ class User(Role):
                 keyboard=user_menu(),
             )
 
-        @self.labeler.private_message(text=["мои записи"])
+        @self.labeler.private_message(text=["мои записи"], func=self.is_user)
         async def my_bookings(message: Message):
             records = sorted(
                 get_user_active_bookings(message.from_id),
@@ -601,7 +579,7 @@ class User(Role):
             )
 
         @self.labeler.private_message(
-            func=lambda m: m.from_id not in ADMIN_IDS
+            func=lambda m: self.is_user(m)
             and not self.context.get(m.from_id, {}).get("step")
             and not self.extract_payload(m)
             and self.normalize(m.text) not in user_commands

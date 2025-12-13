@@ -110,7 +110,7 @@ class Admin(Role):
 
             self.context.pop(message.from_id, None)
 
-        @self.labeler.private_message(text=["Админ меню"])
+        @self.labeler.private_message(text=["Админ меню"], func=self.is_admin)
         async def show_admin_menu(message: Message):
             if not self.is_admin(message):
                 return
@@ -121,6 +121,7 @@ class Admin(Role):
         
         @self.labeler.private_message(
             func=lambda m: self.context.get(m.from_id, {}).get("step") == "booking_list"
+            and self.is_admin(m)
         )
         async def handle_booking_list_selection(message: Message, page: int = 0):
             if not self.is_admin(message):
@@ -219,7 +220,7 @@ class Admin(Role):
             context["current_page"] = page
             self.context[message.from_id] = context
 
-        @self.labeler.private_message(text=["Неподтвержденные"])
+        @self.labeler.private_message(text=["Неподтвержденные"], func=self.is_admin)
         async def pending_list(message: Message):
             if not self.is_admin(message):
                 return
@@ -279,7 +280,7 @@ class Admin(Role):
                 else:
                     await message.answer(f"📋 Записи:\n{chunk}")
 
-        @self.labeler.private_message(text=["Блокировать слот"])
+        @self.labeler.private_message(text=["Блокировать слот"], func=self.is_admin)
         async def start_block_slot(message: Message):
             if not self.is_admin(message):
                 return
@@ -330,6 +331,7 @@ class Admin(Role):
 
         @self.labeler.private_message(
             func=lambda m: self.context.get(m.from_id, {}).get("step") == "block_time"
+            and self.is_admin(m)
         )
         async def handle_block_time(message: Message):
             if not self.is_admin(message):
@@ -402,7 +404,7 @@ class Admin(Role):
                 keyboard=admin_menu(),
             )
 
-        @self.labeler.private_message(text=["Разблокировать слот"])
+        @self.labeler.private_message(text=["Разблокировать слот"], func=self.is_admin)
         async def start_unblock(message: Message):
             if not self.is_admin(message):
                 return
@@ -421,6 +423,7 @@ class Admin(Role):
 
         @self.labeler.private_message(
             func=lambda m: self.context.get(m.from_id, {}).get("step") == "unblock_select"
+            and self.is_admin(m)
         )
         async def handle_unblock_selection(message: Message):
             if not self.is_admin(message):
@@ -460,7 +463,7 @@ class Admin(Role):
             )
 
 
-        @self.labeler.private_message(text=["Черный список"])
+        @self.labeler.private_message(text=["Черный список"], func=self.is_admin)
         async def request_blacklist(message: Message):
             if not self.is_admin(message):
                 return
@@ -473,14 +476,14 @@ class Admin(Role):
 
             
 
-        @self.labeler.private_message(text=["+ в черный список"])
+        @self.labeler.private_message(text=["+ в черный список"], func=self.is_admin)
         async def request_blacklist_add(message: Message):
             if not self.is_admin(message):
                 return
             self.context[message.from_id] = {"step": "blacklist_add"}
             await message.answer("Отправьте ссылку пользователя для добавления в черный список.")
 
-        @self.labeler.private_message(text=["- из черного списка"])
+        @self.labeler.private_message(text=["- из черного списка"], func=self.is_admin)
         async def request_blacklist_remove(message: Message):
             if not self.is_admin(message):
                 return
@@ -490,6 +493,7 @@ class Admin(Role):
         @self.labeler.private_message(
             func=lambda m: self.context.get(m.from_id, {}).get("step")
             in {"blacklist_add", "blacklist_remove"}
+            and self.is_admin(m)
         )
         async def handle_blacklist_input(message: Message):
             if not self.is_admin(message):
@@ -513,6 +517,7 @@ class Admin(Role):
 
         @self.labeler.private_message(
             func=lambda m: self.context.get(m.from_id, {}).get("step") == "reject_reason"
+            and self.is_admin(m)
         )
         async def handle_reject_reason(message: Message):
             if not self.is_admin(message):
@@ -534,7 +539,7 @@ class Admin(Role):
                 return
             await finalize_rejection(message, record, reason)
 
-        @self.labeler.private_message(func=lambda m: m.from_id in ADMIN_IDS)
+        @self.labeler.private_message(func=self.is_admin)
         async def handle_admin_payloads(message: Message):
             payload = self.extract_payload(message)
             action = payload.get("action")
@@ -614,7 +619,7 @@ class Admin(Role):
                 return
 
         @self.labeler.private_message(
-            func=lambda m: m.from_id in ADMIN_IDS
+            func=lambda m: self.is_admin(m)
             and not self.context.get(m.from_id, {}).get("step")
             and not self.extract_payload(m)
             and self.normalize(m.text) not in admin_commands
