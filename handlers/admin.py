@@ -28,6 +28,7 @@ from google_sheets import (
     add_booking,
     complete_booking,
     delete_booking,
+    set_booking_confirmed,
     get_admin_blockings,
     get_blacklist,
     get_bookings,
@@ -529,84 +530,84 @@ class Admin(Role):
                 return
             await finalize_rejection(message, record, reason)
 
-        # @self.labeler.private_message(func=self.is_admin)
-        # async def handle_admin_payloads(message: Message):
-        #     payload = self.extract_payload(message)
-        #     action = payload.get("action")
-        #     if not action:
-        #         return
+        @self.labeler.private_message(func=self.is_admin)
+        async def handle_admin_payloads(message: Message):
+            payload = self.extract_payload(message)
+            action = payload.get("action")
+            if not action:
+                return
 
-        #     context = self.context.get(message.from_id)
+            context = self.context.get(message.from_id)
 
-        #     if action != "admin_reject" and context and context.get("step") == "reject_reason":
-        #         await message.answer("Сначала укажите причину отказа.")
-        #         return
+            if action != "admin_reject" and context and context.get("step") == "reject_reason":
+                await message.answer("Сначала укажите причину отказа.")
+                return
 
-        #     if action == "admin_confirm":
-        #         row = str(payload.get("row"))
-        #         record = next(
-        #             (r for r in get_pending_bookings() if str(r["_row"]) == row),
-        #             None,
-        #         )
-        #         if not record:
-        #             await message.answer("❌ Заявка уже обработана или не найдена.")
-        #             return
+            if action == "admin_confirm":
+                row = str(payload.get("row"))
+                record = next(
+                    (r for r in get_pending_bookings() if str(r["_row"]) == row),
+                    None,
+                )
+                if not record:
+                    await message.answer("❌ Заявка уже обработана или не найдена.")
+                    return
 
-        #         admin_info = (await message.ctx_api.users.get(message.from_id))[0]
-        #         admin_name = f"{admin_info.first_name} {admin_info.last_name}"
-        #         updated = set_booking_confirmed(record, admin_name)
-        #         await message.answer(
-        #             f"✅ Заявка подтверждена.\n{self.format_booking(updated)}",
-        #             keyboard=admin_menu(),
-        #         )
-        #         await send_user_notification(
-        #             updated.get("Пользователь_ID"),
-        #             "✅ Ваша запись подтверждена!\n"
-        #             f"Дата: {updated['Дата']} {updated['Время']}\n"
-        #             f"Опции: {updated.get('Опция стирки') or 'Без добавок'}",
-        #         )
-        #         return
+                admin_info = (await message.ctx_api.users.get(message.from_id))[0]
+                admin_name = f"{admin_info.first_name} {admin_info.last_name}"
+                updated = set_booking_confirmed(record, admin_name)
+                await message.answer(
+                    f"✅ Заявка подтверждена.\n{self.format_booking(updated)}",
+                    keyboard=admin_menu(),
+                )
+                await send_user_notification(
+                    updated.get("Пользователь_ID"),
+                    "✅ Ваша запись подтверждена!\n"
+                    f"Дата: {updated['Дата']} {updated['Время']}\n"
+                    f"Опции: {updated.get('Опция стирки') or 'Без добавок'}",
+                )
+                return
 
-        #     if action == "admin_reject":
-        #         context = self.context.get(message.from_id)
-        #         if context and context.get("step") == "reject_reason" and context.get("record"):
-        #             record = context["record"]
-        #             await finalize_rejection(
-        #                 message, record, "", persist_context=False
-        #             )
-        #             self.context.pop(message.from_id, None)
-        #             return
+            if action == "admin_reject":
+                context = self.context.get(message.from_id)
+                if context and context.get("step") == "reject_reason" and context.get("record"):
+                    record = context["record"]
+                    await finalize_rejection(
+                        message, record, "", persist_context=False
+                    )
+                    self.context.pop(message.from_id, None)
+                    return
 
-        #         row = str(payload.get("row"))
-        #         record = next(
-        #             (r for r in get_pending_bookings() if str(r["_row"]) == row),
-        #             None,
-        #         )
-        #         if not record:
-        #             await message.answer("❌ Заявка уже обработана или не найдена.")
-        #             return
+                row = str(payload.get("row"))
+                record = next(
+                    (r for r in get_pending_bookings() if str(r["_row"]) == row),
+                    None,
+                )
+                if not record:
+                    await message.answer("❌ Заявка уже обработана или не найдена.")
+                    return
 
-        #         self.context[message.from_id] = {
-        #             "step": "reject_reason",
-        #             "record": record,
-        #         }
-        #         await message.answer(
-        #             "Укажите причину отказа для пользователя "
-        #             f"{record['Пользователь']} ({record['Дата']} {record['Время']}):"
-        #         )
-        #         return
+                self.context[message.from_id] = {
+                    "step": "reject_reason",
+                    "record": record,
+                }
+                await message.answer(
+                    "Укажите причину отказа для пользователя "
+                    f"{record['Пользователь']} ({record['Дата']} {record['Время']}):"
+                )
+                return
 
-        #     if action in {"admin_unblock", "admin_unblock_cancel"}:
-        #         # Эти действия обрабатываются в другом обработчике со стейтом.
-        #         return
+            if action in {"admin_unblock", "admin_unblock_cancel"}:
+                # Эти действия обрабатываются в другом обработчике со стейтом.
+                return
             
-        #     if action == "back_to_menu":
-        #         self.context.pop(message.from_id, None)
-        #         await message.answer(
-        #             "Админ меню:",
-        #             keyboard=admin_menu(),
-        #         )
-        #         return
+            if action == "back_to_menu":
+                self.context.pop(message.from_id, None)
+                await message.answer(
+                    "Админ меню:",
+                    keyboard=admin_menu(),
+                )
+                return
 
         @self.labeler.private_message(
             func=lambda m: self.is_admin(m)
