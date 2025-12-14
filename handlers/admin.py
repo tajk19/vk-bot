@@ -92,8 +92,8 @@ class Admin(Role):
             updated = delete_booking(record)
             if persist_context:
                 self.context.pop(message.from_id, None)
-            if updated is None:
-                await message.answer("Запись уже была удалена.")
+            if updated:
+                await message.answer("Запись была удалена.")
                 return
 
             display_reason = reason if reason else "не указана"
@@ -103,9 +103,9 @@ class Admin(Role):
             )
 
             await send_user_notification(
-                updated.get("Пользователь_ID"),
+                record.get("Пользователь_ID"),
                 "❌ Ваша запись отклонена.\n"
-                f"Дата: {updated['Дата']} {updated['Время']}\n"
+                f"Дата: {record['Дата']} {record['Время']}\n"
                 f"Причина: {display_reason}",
             )
 
@@ -530,6 +530,15 @@ class Admin(Role):
                 return
             await finalize_rejection(message, record, reason)
 
+        @self.labeler.private_message(
+            func=lambda m: self.is_admin(m)
+            and not self.context.get(m.from_id, {}).get("step")
+            and not self.extract_payload(m)
+            and self.normalize(m.text) not in admin_commands
+        )
+        async def admin_fallback(message: Message):
+            await message.answer("Админ меню:", keyboard=admin_menu())
+
         @self.labeler.private_message(func=self.is_admin)
         async def handle_admin_payloads(message: Message):
             payload = self.extract_payload(message)
@@ -608,12 +617,3 @@ class Admin(Role):
                     keyboard=admin_menu(),
                 )
                 return
-
-        @self.labeler.private_message(
-            func=lambda m: self.is_admin(m)
-            and not self.context.get(m.from_id, {}).get("step")
-            and not self.extract_payload(m)
-            and self.normalize(m.text) not in admin_commands
-        )
-        async def admin_fallback(message: Message):
-            await message.answer("Админ меню:", keyboard=admin_menu())

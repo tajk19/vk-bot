@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from vkbottle.bot import Bot
 
 from cache import get_cache
-from config import ADMIN_IDS, NOTIFY_AFTER_MIN, NOTIFY_BEFORE_MIN, WASH_DURATION_MIN
+from config import ADMIN_IDS, NOTIFY_AFTER_MIN, NOTIFY_BEFORE_MIN
 from google_sheets import STATUS_CONFIRMED, ACTIVE_STATUSES, check_sheet_changes, complete_booking, get_bookings
 
 logger = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ async def notification_loop(bot: Bot):
             booking_time_str = f"{booking['Дата']} {booking['Время']}"
             try:
                 booking_start = datetime.strptime(
-                    booking_time_str, "%d-%m-%y %H:%M"
+                    booking_time_str, "%d.%m.%y %H:%M"
                 )
                 booking_start = booking_start.replace(tzinfo=moscow_tz)
             except ValueError:

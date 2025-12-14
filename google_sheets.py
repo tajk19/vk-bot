@@ -344,7 +344,7 @@ def update_booking(record: Dict[str, str], updates: Dict[str, str]) -> Dict[str,
     return updated
 
 
-def delete_booking(record: Dict[str, str]) -> None:
+def delete_booking(record: Dict[str, str]) -> bool:
     list_sheet.delete_rows(record["_row"])
     # Инвалидируем кеш бронирований после удаления
     invalidate_bookings_cache()
