@@ -24,7 +24,7 @@ from cache import (
 )
 from config import (
     SPREADSHEET_NAME,
-    format_date_with_weekday,
+    DATE_FORMAT
 )
 
 # Путь к JSON-файлу сервисного аккаунта Google
@@ -233,7 +233,7 @@ def _filter_records(
     statuses: Optional[Iterable[str]] = None,
 ) -> List[Dict[str, str]]:
     filtered = []
-    date_str = str(format_date_with_weekday(date)) if date else None
+    date_str = str(date) if date else None
     user_id_str = str(user_id) if user_id is not None else None
     statuses_set = set(statuses) if statuses else None
     for record in records:
@@ -273,7 +273,7 @@ def get_bookings(
         return _fetch_records(list_sheet)
     
     if date: 
-        date_str = str(format_date_with_weekday(date))
+        date_str = str(datetime.strftime(date, DATE_FORMAT))
     else:
         date_str = None
 
@@ -316,7 +316,7 @@ def add_booking(
         confirmed_at: Время подтверждения (по умолчанию пустая строка)
         decline_reason: Причина отказа (по умолчанию пустая строка)
     """
-    date_str = str(format_date_with_weekday(date))
+    date_str = str(date)
     record = {
         "Пользователь": user_name,
         "Ссылка": user_link,

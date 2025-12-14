@@ -456,7 +456,7 @@ class User(Role):
             add_booking(
                 user_name=full_name,
                 user_link=user_link,
-                date=selected_date,
+                date=datetime.strftime(selected_date, DATE_FORMAT),
                 time_slot=time_text,
                 user_id=message.from_id,
                 status=STATUS_PENDING,

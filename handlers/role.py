@@ -69,7 +69,7 @@ class Role():
         if active_bookings is None:
             bookings = get_bookings(date=selected_date, statuses=ACTIVE_STATUSES)
         else:
-            date_str = format_date_with_weekday(selected_date)
+            date_str = selected_date
             bookings = [
                 booking for booking in active_bookings if booking.get("Дата") == date_str
             ]

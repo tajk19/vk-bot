@@ -335,7 +335,7 @@ class Admin(Role):
             action = payload.get("action")
             active_bookings = context.get("active_bookings")
             
-            selected_date: datetime.date = context["date"]
+            selected_date: datetime.date = context["date"] 
             if not selected_date:
                 self.context.pop(message.from_id, None)
                 await message.answer("Сессия прервана. Начните заново.")
@@ -394,7 +394,7 @@ class Admin(Role):
             add_booking(
                 user_name="Блокировка администратора",
                 user_link="admin_blocked",
-                date=selected_date,
+                date=datetime.strftime(selected_date, DATE_FORMAT),
                 time_slot=time_text,
                 user_id=None,
                 status=STATUS_BLOCKED,
