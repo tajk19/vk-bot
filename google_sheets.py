@@ -3,6 +3,7 @@
 Обеспечивает взаимодействие с таблицами для хранения записей, расписания и черного списка.
 Использует кеширование для оптимизации производительности.
 """
+#https://docs.google.com/spreadsheets/d/1s9zB97Qxnp1YpoJMlB9wbRAk_b51D-9cDfBcsQvQu9g/edit?gid=0#gid=0
 from datetime import datetime
 import time
 import logging
@@ -554,7 +555,7 @@ def get_blacklist_sync() -> List[str]:
     return get_cached_blacklist(with_retries(loader))
 
 
-async def get_blacklist(api: API) -> List[str]:
+async def get_blacklist() -> List[str]:
     """Асинхронная обертка для совместимости."""
     return get_blacklist_sync()
 

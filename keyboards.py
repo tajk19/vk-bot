@@ -17,7 +17,7 @@ def user_menu() -> Keyboard:
         Keyboard объект с кнопками юзер-меню
     """
 
-    keyboard = Keyboard(one_time=True, inline=False)
+    keyboard = Keyboard(one_time=False, inline=False)
     keyboard.add(Text("Записаться"))
     keyboard.add(Text("Мои записи"))
     keyboard.row()
@@ -63,7 +63,7 @@ def wash_options_keyboard(
         Keyboard объект с кнопками опций
     """
     selected_set = set(selected)
-    keyboard = Keyboard(inline=True)
+    keyboard = Keyboard(one_time=True, inline=False)
     count = 0
     for option in options:
         is_selected = (
@@ -103,7 +103,7 @@ def cancellation_keyboard(bookings: Sequence[dict]) -> Keyboard:
     Returns:
         Keyboard объект с кнопками записей
     """
-    keyboard = Keyboard(inline=True)
+    keyboard = Keyboard(inline=False)
     for booking in bookings:
         label = f"{booking['Дата']} {booking['Время']}"
         keyboard.add(
@@ -156,7 +156,7 @@ def unblock_keyboard(blockings: Sequence[dict]) -> Keyboard:
     Returns:
         Keyboard объект с кнопками слотов
     """
-    keyboard = Keyboard(inline=True)
+    keyboard = Keyboard(one_time=False, inline=False)
     for record in blockings:
         label = f"{record['Дата']} {record['Время']}"
         keyboard.add(
@@ -186,7 +186,7 @@ def booking_list_keyboard(
     
     keyboard = Keyboard(one_time=True, inline=False)
     for idx, item in enumerate(page_items):
-        label = f"{item['Дата']} {item['Время']} - {item['Пользователь']}"
+        label = f"{item['Дата']} {item['Время']}\n{item['Пользователь']}"
         keyboard.add(
             Text(
                 label,

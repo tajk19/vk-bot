@@ -31,7 +31,7 @@ from google_sheets import (
     STATUS_PENDING,
     add_booking,
     delete_booking,
-    get_blacklist_sync,
+    get_blacklist,
     get_bookings,
     get_user_active_bookings,
     is_time_free,
@@ -49,6 +49,11 @@ class User(Role):
         self.labeler.vbml_ignore_case = True
         self.register(bot)
         bot.labeler.load(self.labeler)
+    
+    def format_booking(self, record: Dict[str, str]) -> str:
+        option = record.get("Опция стирки") or "Без добавок"
+        return f"{format_date_with_weekday(datetime.strptime(record['Дата'], DATE_FORMAT))} {record['Время']} — ({option})"
+
     
     HELP_TEXT = (
         "Доступные команды:\n"
@@ -146,8 +151,6 @@ class User(Role):
             "мои записи",
             "связаться с админом",
             "связаться с администратором",
-            "вернуться в меню",
-            "назад"
         }
 
         @self.labeler.private_message(
@@ -163,7 +166,7 @@ class User(Role):
         async def start_booking(message: Message):
             # Быстрая проверка черного списка (синхронная, без await)
             user_link = f"https://vk.com/id{message.from_id}"
-            blacklist = get_blacklist_sync()
+            blacklist = await get_blacklist()
             if user_link in blacklist:
                 await message.answer("❌ Вы в черном списке и не можете записываться.")
                 return
@@ -289,7 +292,7 @@ class User(Role):
                 )
                 return
             
-            if action == "one_step_back" and context["step"]:
+            if action == "one_step_back" and context["step"] == "choose_time":
                 self.context[message.from_id].pop("date")
                 self.context[message.from_id]["step"] = "choose_date"
                 page = 0
@@ -422,14 +425,6 @@ class User(Role):
                 )
                 return
 
-            if action == "options_cancel":
-                self.reset_context(message.from_id)
-                await message.answer(
-                    "Выбор отменён.",
-                    keyboard=user_menu(),
-                )
-                return
-
             if action != "options_done":
                 await message.answer(
                     "Используйте кнопки, чтобы выбрать опции, или нажмите «Готово».",
@@ -478,7 +473,7 @@ class User(Role):
                         message=admin_message,
                         random_id=0,
                     )
-                except Exception as exc:  # pragma: no cover - уведомление админа
+                except Exception as exc:
                     self.logger.warning(
                         "Не удалось уведомить администратора %s: %s", admin_id, exc
                     )
@@ -532,17 +527,9 @@ class User(Role):
                 )
                 return
 
-            if action == "cancel_abort":
-                self.reset_context(message.from_id)
-                await message.answer(
-                    "Отмена бронирования прервана.",
-                    keyboard=user_menu(),
-                )
-                return
-
             if action != "cancel_booking":
                 await message.answer(
-                    "Выберите запись кнопкой на клавиатуре или нажмите «Отмена».",
+                    "Выберите запись кнопкой на клавиатуре или нажмите «Вернуться в главное».",
                     keyboard=cancellation_keyboard(
                         list(context.get("bookings", {}).values())
                     ),
@@ -596,14 +583,24 @@ class User(Role):
         )
         async def fallback(message: Message):
             await message.answer(
-                "Привет! Я бот для записи на стирку вещей.\n"
-                "Спасибо, что выбираешь постираться у меня! 🥺\n"
-                "Вот такие расценки:\n"
-                "90 рублей - стирка со своим порошком🤌\n"
-                "Допы: с моим порошком +15 руб, с моим гелем, кондиционером или отбеливателем +20 руб 💥\n"
-                "+79842878451 альфа банк 💸\n"
-                "11 этаж 297 комната 😶‍🌫️\n"
-                "Приноси заранее за 5-10 минут, оставляй на пороге(внутри), стучаться не надо❗❗❗\n\n\n"
+                f"Всем привет! "
+                "Это бот для записи на стирку.\n"
+                "❗ Чтобы записаться, напишите в ЛС боту ❗\n\n"
+                "Расценки:\n"
+                "• 90 рублей — стирка со своим порошком 🤌\n"
+                "Дополнительно:\n"
+                "• Мой порошок — +15 руб.\n"
+                "• Мой гель, кондиционер или отбеливатель — +20 руб. 💥\n\n"
+                "Оплата:\n"
+                "📱 +7 984 287-84-51\n"
+                "💳 Альфа-Банк\n\n"
+                "Где:\n"
+                "🏢2 корпус, 11 этаж, 297 комната 😶‍\n\n"
+                "Важно:\n"
+                "• Приносите вещи за 5–10 минут заранее\n"
+                "• Оставляйте на пороге (внутри)\n"
+                "• Стучаться не нужно ❗❗❗\n"
+                "💬 Можете писать отзывы и предложения — что добавить или убрать. Будем развиваться 🤗"
             )
             await message.answer(
                 f"{self.HELP_TEXT}\nВыберите действие:",

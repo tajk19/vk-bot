@@ -55,7 +55,7 @@ class Role():
         self.context.pop(id, None)
     
     
-    def all_time_slots(self         ) -> List[str]:
+    def all_time_slots(self) -> List[str]:
         return [
             f"{minutes // 60:02d}:{minutes % 60:02d}"
             for minutes in range(0, 24 * 60, SLOT_INTERVAL_MIN)
@@ -128,10 +128,6 @@ class Role():
             if self.free_times_for_date(date, active_bookings):
                 dates.append(date)
         return dates
-
-    def format_booking(self, record: Dict[str, str]) -> str:
-        option = record.get("Опция стирки") or "Без добавок"
-        return f"{record['Дата']} {record['Время']} — {record['Пользователь']}/{record['Ссылка']}\n({option})\n"
 
     def date_keyboard(
         self,

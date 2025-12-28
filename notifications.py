@@ -107,7 +107,7 @@ async def notification_loop(bot: Bot):
         
         # Удаляем прошедшие записи (которые уже прошли более чем на WASH_DURATION_MIN + NOTIFY_AFTER_MIN минут)
         # Проверяем все подтвержденные записи, не только за сегодня
-        all_bookings = get_bookings(statuses=ACTIVE_STATUSES)
+        all_bookings = get_bookings()
         processed_today_ids = {booking.get("_row") for booking in today_bookings}
         
         for booking in all_bookings:
@@ -118,7 +118,7 @@ async def notification_loop(bot: Bot):
             booking_time_str = f"{booking['Дата']} {booking['Время']}"
             try:
                 booking_start = datetime.strptime(
-                    booking_time_str, "%d-%m-%y %H:%M"
+                    booking_time_str, "%d.%m.%y %H:%M"
                 )
                 booking_start = booking_start.replace(tzinfo=moscow_tz)
             except ValueError:

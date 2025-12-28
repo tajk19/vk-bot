@@ -50,6 +50,11 @@ class Admin(Role):
         self.register(bot)
         bot.labeler.load(self.labeler)
     
+    def format_booking(self, record: Dict[str, str]) -> str:
+        option = record.get("Опция стирки") or "Без добавок"
+        return f"{record['Дата']} {record['Время']} — {record['Пользователь']}/{record['Ссылка']} ({option})"
+
+    
     def register(self, bot: Bot):
         admin_commands = {
             "неподтвержденные",
@@ -91,7 +96,7 @@ class Admin(Role):
             # Удаляем запись
             updated = delete_booking(record)
             if persist_context:
-                self.context.pop(message.from_id, None)
+                self.reset_context(message.from_id)
             if updated:
                 await message.answer("Запись была удалена.")
                 return
@@ -109,7 +114,7 @@ class Admin(Role):
                 f"Причина: {display_reason}",
             )
 
-            self.context.pop(message.from_id, None)
+            self.reset_context(message.from_id)
 
         @self.labeler.private_message(text=["Админ меню"], func=self.is_admin)
         async def show_admin_menu(message: Message):
@@ -132,7 +137,7 @@ class Admin(Role):
                 return
             
             if action == "back_to_menu":
-                self.context.pop(message.from_id, None)
+                self.reset_context(message.from_id)
                 await message.answer(
                     "Админ меню:",
                     keyboard=admin_menu(),
@@ -140,7 +145,7 @@ class Admin(Role):
                 return
             
             # Получаем ВСЕ записи для контекста
-            all_bookings = get_bookings()  # Твоя функция получения всех записей
+            all_bookings = get_bookings(statuses=STATUS_CONFIRMED)
             
             if action != "admin_complete_booking":
                 # Сохраняем все записи в контекст для последующего использования
@@ -163,7 +168,7 @@ class Admin(Role):
                     break
             
             if not target_booking:
-                self.context.pop(message.from_id, None)
+                self.reset_context(message.from_id)
                 await message.answer("Не удалось найти запись. Попробуйте снова.")
                 return
             
@@ -182,7 +187,7 @@ class Admin(Role):
             
             # Удаляем запись
             complete_booking(target_booking)
-            self.context.pop(message.from_id, None)
+            self.reset_context(message.from_id)
             
             await message.answer(
                 f"✅ Запись завершена и удалена из таблицы.\n"
@@ -195,7 +200,7 @@ class Admin(Role):
             
             # Получаем все записи из контекста или заново
             context = self.context.get(message.from_id, {})
-            all_bookings = context.get("all_bookings", get_bookings())
+            all_bookings = context.get("bookings", get_bookings(statuses=STATUS_CONFIRMED))
             
             await show_booking_page(message, all_bookings, page)
 
@@ -338,7 +343,7 @@ class Admin(Role):
             
             selected_date: datetime.date = context["date"] 
             if not selected_date:
-                self.context.pop(message.from_id, None)
+                self.reset_context(message.from_id)
                 await message.answer("Сессия прервана. Начните заново.")
                 return
             
@@ -403,7 +408,7 @@ class Admin(Role):
                 confirmed_by="Администратор",
                 confirmed_at=datetime.utcnow().isoformat(),
             )
-            self.context.pop(message.from_id, None)
+            self.reset_context(message.from_id)
             await message.answer(
                 f"✅ Слот {format_date_with_weekday(selected_date)} {time_text} заблокирован.",
                 keyboard=admin_menu(),
@@ -433,8 +438,8 @@ class Admin(Role):
             action = payload.get("action")
             context = self.context.get(message.from_id, {})
 
-            if action == "admin_unblock_cancel":
-                self.context.pop(message.from_id, None)
+            if action == "back_to_menu":
+                self.reset_context(message.from_id)
                 await message.answer(
                     "Разблокировка отменена.",
                     keyboard=admin_menu(),
@@ -452,12 +457,12 @@ class Admin(Role):
             row_key = str(payload.get("row"))
             record = context.get("blockings", {}).get(row_key)
             if not record:
-                self.context.pop(message.from_id, None)
+                self.reset_context(message.from_id)
                 await message.answer("Не удалось найти слот. Попробуйте снова.")
                 return
-
+            
+            self.reset_context(message.from_id)
             delete_booking(record)
-            self.context.pop(message.from_id, None)
             await message.answer(
                 "✅ Слот разблокирован.",
                 keyboard=admin_menu(),
@@ -466,7 +471,7 @@ class Admin(Role):
 
         @self.labeler.private_message(text=["Черный список"], func=self.is_admin)
         async def request_blacklist(message: Message):
-            blacklist = await get_blacklist(bot.api)
+            blacklist = await get_blacklist()
             if blacklist:
                 for user in blacklist:
                     await message.answer(user)
@@ -491,16 +496,27 @@ class Admin(Role):
             and self.is_admin(m)
         )
         async def handle_blacklist_input(message: Message):
-            context = self.context.get(message.from_id, {})
-            step = context.get("step")
+            payload = self.extract_payload(message)
+            action = payload.get("action")
+            
+            if action == "back_to_menu":
+                self.reset_context(message.from_id)
+                await message.answer(
+                    "Разблокировка отменена.",
+                    keyboard=admin_menu(),
+                )
+                return
+            
+            step = self.context.get(message.from_id, {}).get("step")
             link = message.text
+            
             if step == "blacklist_add":
                 await add_blacklist(bot.api, link)
-                self.context.pop(message.from_id, None)
+                self.reset_context(message.from_id)
                 await message.answer(f"✅ Пользователь {link} добавлен в черный список.")
             elif step == "blacklist_remove":
                 removed = remove_blacklist(link)
-                self.context.pop(message.from_id, None)
+                self.reset_context(message.from_id)
                 if removed:
                     await message.answer(f"✅ Пользователь {link} удален из черного списка.")
                 else:
@@ -516,7 +532,7 @@ class Admin(Role):
             context = self.context.get(message.from_id, {})
             record = context.get("record")
             if not record:
-                self.context.pop(message.from_id, None)
+                self.reset_context(message.from_id)
                 await message.answer("Сессия истекла. Отклонение не выполнено.")
                 return
             if self.extract_payload(message):
@@ -548,9 +564,9 @@ class Admin(Role):
 
             context = self.context.get(message.from_id)
 
-            if action != "admin_reject" and context and context.get("step") == "reject_reason":
-                await message.answer("Сначала укажите причину отказа.")
-                return
+            # if action != "admin_reject" and context and context.get("step") == "reject_reason":
+            #     await message.answer("Сначала укажите причину отказа.")
+            #     return
 
             if action == "admin_confirm":
                 row = str(payload.get("row"))
@@ -577,41 +593,40 @@ class Admin(Role):
                 )
                 return
 
-            if action == "admin_reject":
-                context = self.context.get(message.from_id)
-                if context and context.get("step") == "reject_reason" and context.get("record"):
-                    record = context["record"]
-                    await finalize_rejection(
-                        message, record, "", persist_context=False
-                    )
-                    self.context.pop(message.from_id, None)
-                    return
+            # if action == "admin_reject":
+            #     context = self.context.get(message.from_id)
+            #     if context and context.get("step") == "reject_reason" and context.get("record"):
+            #         record = context["record"]
+            #         await finalize_rejection(
+            #             message, record, "", persist_context=False
+            #         )
+            #         return
 
-                row = str(payload.get("row"))
-                record = next(
-                    (r for r in get_pending_bookings() if str(r["_row"]) == row),
-                    None,
-                )
-                if not record:
-                    await message.answer("❌ Заявка уже обработана или не найдена.")
-                    return
+            #     row = str(payload.get("row"))
+            #     record = next(
+            #         (r for r in get_pending_bookings() if str(r["_row"]) == row),
+            #         None,
+            #     )
+            #     if not record:
+            #         await message.answer("❌ Заявка уже обработана или не найдена.")
+            #         return
 
-                self.context[message.from_id] = {
-                    "step": "reject_reason",
-                    "record": record,
-                }
-                await message.answer(
-                    "Укажите причину отказа для пользователя "
-                    f"{record['Пользователь']} ({record['Дата']} {record['Время']}):"
-                )
-                return
+            #     self.context[message.from_id] = {
+            #         "step": "reject_reason",
+            #         "record": record,
+            #     }
+            #     await message.answer(
+            #         "Укажите причину отказа для пользователя "
+            #         f"{record['Пользователь']} ({record['Дата']} {record['Время']}):"
+            #     )
+            #     return
 
-            if action in {"admin_unblock", "admin_unblock_cancel"}:
-                # Эти действия обрабатываются в другом обработчике со стейтом.
-                return
+            # if action in {"admin_unblock", "admin_unblock_cancel"}:
+            #     # Эти действия обрабатываются в другом обработчике со стейтом.
+            #     return
             
             if action == "back_to_menu":
-                self.context.pop(message.from_id, None)
+                self.reset_context(message.from_id)
                 await message.answer(
                     "Админ меню:",
                     keyboard=admin_menu(),

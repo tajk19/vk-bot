@@ -5,6 +5,7 @@
 import os
 from datetime import date, datetime
 from pathlib import Path
+from typing import Optional
 
 try:
     from dotenv import load_dotenv
@@ -59,10 +60,13 @@ SHEET_CHECK_INTERVAL = int(os.getenv("SHEET_CHECK_INTERVAL", "60"))  # 1 мин�
 def format_date_with_weekday(d: date) -> str:
     return f"{WEEKDAYS_SHORT_RU[d.weekday()]} - {d.strftime(DATE_FORMAT)}"
 
-def convert_from_format_with_weekday(value: str) -> date:
-    date_part = value.split("-")[1].strip()
+def convert_from_format_with_weekday(value: str) -> Optional[date]:
+    try:
+        date_part = value.split("-")[1].strip()
 
-    return datetime.strptime(
-        date_part,
-        "%d.%m.%y"
-    ).date()
+        return datetime.strptime(
+            date_part,
+            "%d.%m.%y"
+        ).date()
+    except IndexError:
+        return None
