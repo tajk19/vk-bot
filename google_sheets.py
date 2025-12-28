@@ -278,7 +278,13 @@ def get_bookings(
     else:
         date_str = None
 
-    statuses_tuple = tuple(statuses) if statuses else None
+    if statuses is None:
+        statuses_tuple = None
+    elif isinstance(statuses, str):
+        statuses_tuple = (statuses,)
+    else:
+        statuses_tuple = tuple(statuses)
+
 
     all_records = get_cached_bookings(
         loader=with_retries(loader),

@@ -92,6 +92,12 @@ def wash_options_keyboard(
     keyboard.add(Text("Вернуться в главное меню", payload={"action": "back_to_menu"}))
     return keyboard
 
+def back_to_menu_keyboard():
+    
+    keyboard = Keyboard(one_time=False, inline=False)
+    keyboard.add(Text("Вернуться в главное меню", payload={"action": "back_to_menu"}))
+    
+    return keyboard
 
 def cancellation_keyboard(bookings: Sequence[dict]) -> Keyboard:
     """

@@ -41,6 +41,7 @@ from keyboards import (
     admin_menu,
     pending_decision_keyboard,
     unblock_keyboard,
+    back_to_menu_keyboard
 )
 
 class Admin(Role):
@@ -225,7 +226,13 @@ class Admin(Role):
             if not records:
                 await message.answer("📭 Нет заявок, ожидающих подтверждения.")
                 return
+            
+            await message.answer(
+                'Если хотите вернуться, нажмите на кнопку "Вернуться в главное меню"',
+                keyboard=back_to_menu_keyboard())
+            
             for record in records:
+                self.context[message.from_id] = {"step": "confirm_records"}
                 date = format_date_with_weekday(datetime.strptime(record['Дата'], DATE_FORMAT).date())
                 details = (
                     f"Заявка №{record['_row']}:\n"
@@ -237,6 +244,94 @@ class Admin(Role):
                     details,
                     keyboard=pending_decision_keyboard(record["_row"]),
                 )
+                
+        
+        @self.labeler.private_message(
+            func=lambda m: self.context.get(m.from_id, {}).get("step") == "confirm_records"
+            and self.is_admin(m)
+        )
+        async def handle_confirm_records(message: Message):
+            payload = self.extract_payload(message)
+            action = payload.get("action")
+            if not action:
+                return
+            
+            if action == "back_to_menu":
+                self.reset_context(message.from_id)
+                await message.answer(
+                    "Админ меню:",
+                    keyboard=admin_menu(),
+                )
+                return
+            
+            if action == "admin_confirm":
+                row = str(payload.get("row"))
+                record = next(
+                    (r for r in get_pending_bookings() if str(r["_row"]) == row),
+                    None,
+                )
+                if not record:
+                    await message.answer("❌ Заявка уже обработана или не найдена.")
+                    return
+
+                admin_info = (await message.ctx_api.users.get(message.from_id))[0]
+                admin_name = f"{admin_info.first_name} {admin_info.last_name}"
+                updated = set_booking_confirmed(record, admin_name)
+                await message.answer(
+                    f"✅ Заявка подтверждена.\n{self.format_booking(updated)}",
+                    keyboard=admin_menu(),
+                )
+                await send_user_notification(
+                    updated.get("Пользователь_ID"),
+                    "✅ Ваша запись подтверждена!\n"
+                    f"Дата: {updated['Дата']} {updated['Время']}\n"
+                    f"Опции: {updated.get('Опция стирки') or 'Без добавок'}",
+                )
+                return
+
+            if action == "admin_reject":
+                row = str(payload.get("row"))
+                record = next(
+                    (r for r in get_pending_bookings() if str(r["_row"]) == row),
+                    None,
+                )
+                if not record:
+                    await message.answer("❌ Заявка уже обработана или не найдена.")
+                    return
+
+                self.context[message.from_id] = {
+                    "step": "reject_reason",
+                    "record": record,
+                }
+                await message.answer(
+                    "Укажите причину отказа для пользователя "
+                    f"{record['Пользователь']} ({record['Дата']} {record['Время']}):"
+                )
+                return
+            
+        @self.labeler.private_message(
+            func=lambda m: self.context.get(m.from_id, {}).get("step") == "reject_reason"
+            and self.is_admin(m))
+        async def reject_record(message: Message):
+            payload = self.extract_payload(message)
+            action = payload.get("action")
+            
+            if action == "back_to_menu":
+                self.reset_context(message.from_id)
+                await message.answer(
+                    "Админ меню:",
+                    keyboard=admin_menu(),
+                )
+                return
+            
+            context = self.context.get(message.from_id)
+            
+            if context and context.get("step") == "reject_reason" and context.get("record"):
+                record = context["record"]
+                await finalize_rejection(
+                    message, record, reason=message.text, persist_context=False
+                )
+                return     
 
         @self.labeler.private_message(text=["Список записей"], func=self.is_admin)
         async def show_bookings(message: Message):
@@ -555,80 +650,6 @@ class Admin(Role):
         async def admin_fallback(message: Message):
             await message.answer("Админ меню:", keyboard=admin_menu())
 
-        @self.labeler.private_message(func=self.is_admin)
-        async def handle_admin_payloads(message: Message):
-            payload = self.extract_payload(message)
-            action = payload.get("action")
-            if not action:
-                return
+        # @self.labeler.private_message(func=self.is_admin)
+        # async def handle_admin_payloads(message: Message):
 
-            context = self.context.get(message.from_id)
-
-            # if action != "admin_reject" and context and context.get("step") == "reject_reason":
-            #     await message.answer("Сначала укажите причину отказа.")
-            #     return
-
-            if action == "admin_confirm":
-                row = str(payload.get("row"))
-                record = next(
-                    (r for r in get_pending_bookings() if str(r["_row"]) == row),
-                    None,
-                )
-                if not record:
-                    await message.answer("❌ Заявка уже обработана или не найдена.")
-                    return
-
-                admin_info = (await message.ctx_api.users.get(message.from_id))[0]
-                admin_name = f"{admin_info.first_name} {admin_info.last_name}"
-                updated = set_booking_confirmed(record, admin_name)
-                await message.answer(
-                    f"✅ Заявка подтверждена.\n{self.format_booking(updated)}",
-                    keyboard=admin_menu(),
-                )
-                await send_user_notification(
-                    updated.get("Пользователь_ID"),
-                    "✅ Ваша запись подтверждена!\n"
-                    f"Дата: {updated['Дата']} {updated['Время']}\n"
-                    f"Опции: {updated.get('Опция стирки') or 'Без добавок'}",
-                )
-                return
-
-            # if action == "admin_reject":
-            #     context = self.context.get(message.from_id)
-            #     if context and context.get("step") == "reject_reason" and context.get("record"):
-            #         record = context["record"]
-            #         await finalize_rejection(
-            #             message, record, "", persist_context=False
-            #         )
-            #         return
-
-            #     row = str(payload.get("row"))
-            #     record = next(
-            #         (r for r in get_pending_bookings() if str(r["_row"]) == row),
-            #         None,
-            #     )
-            #     if not record:
-            #         await message.answer("❌ Заявка уже обработана или не найдена.")
-            #         return
-
-            #     self.context[message.from_id] = {
-            #         "step": "reject_reason",
-            #         "record": record,
-            #     }
-            #     await message.answer(
-            #         "Укажите причину отказа для пользователя "
-            #         f"{record['Пользователь']} ({record['Дата']} {record['Время']}):"
-            #     )
-            #     return
-
-            # if action in {"admin_unblock", "admin_unblock_cancel"}:
-            #     # Эти действия обрабатываются в другом обработчике со стейтом.
-            #     return
-            
-            if action == "back_to_menu":
-                self.reset_context(message.from_id)
-                await message.answer(
-                    "Админ меню:",
-                    keyboard=admin_menu(),
-                )
-                return
