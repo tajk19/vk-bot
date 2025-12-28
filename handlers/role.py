@@ -146,8 +146,8 @@ class Role():
             formatted,
             target="date",
             page=page,
-            buttons_per_row=3,
-            rows_per_page=4,
+            buttons_per_row=2,
+            rows_per_page=5,
         )
         
     def time_keyboard(

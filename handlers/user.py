@@ -514,7 +514,7 @@ class User(Role):
             func=lambda m: self.context.get(m.from_id, {}).get("step") == "cancel_select"
             and self.is_user(m)
         )
-        async def handle_cancel_selection(message: Message):
+        async def handle_cancel_selection(message: Message):#Сделать пагинативную клавиатуру
             context = self.context.get(message.from_id, {})
             payload = self.extract_payload(message)
             action = payload.get("action")
