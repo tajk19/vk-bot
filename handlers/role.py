@@ -15,6 +15,7 @@ from google_sheets import (
     time_of_begining,
     time_of_end,
     ACTIVE_STATUSES,
+    DATE_FORMAT,
 )
 from keyboards import(
     paginate_buttons,
@@ -53,8 +54,7 @@ class Role():
     
     def reset_context(self, id: int) -> None:
         self.context.pop(id, None)
-    
-    
+
     def all_time_slots(self) -> List[str]:
         return [
             f"{minutes // 60:02d}:{minutes % 60:02d}"
@@ -69,7 +69,7 @@ class Role():
         if active_bookings is None:
             bookings = get_bookings(date=selected_date, statuses=ACTIVE_STATUSES)
         else:
-            date_str = selected_date
+            date_str = datetime.strftime(selected_date, DATE_FORMAT)
             bookings = [
                 booking for booking in active_bookings if booking.get("Дата") == date_str
             ]
@@ -135,12 +135,11 @@ class Role():
         active_bookings: Optional[List[Dict[str, str]]] = None,
     ):
         dates = self.booking_window_dates()
-        if active_bookings is None:
-            dates = [
-                date
-                for date in dates
-                if self.free_times_for_date(date, active_bookings)
-            ]
+        dates = [
+            date
+            for date in dates
+            if self.free_times_for_date(date, active_bookings)
+        ]
         formatted = [format_date_with_weekday(date) for date in dates]
         return paginate_buttons(
             formatted,

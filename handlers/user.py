@@ -562,6 +562,24 @@ class User(Role):
                 )
                 return
 
+            vk_user = (await message.ctx_api.users.get(message.from_id))[0]
+            full_name = f"{vk_user.first_name} {vk_user.last_name}"
+            user_link = f"https://vk.com/id{message.from_id}"
+            
+            admin_message = f"Пользователь {full_name} - {user_link} отменил запись {str(record['Дата'])} {str(record['Время'])}",
+
+            for admin_id in ADMIN_IDS:
+                try:
+                    await bot.api.messages.send(
+                        peer_id=admin_id,
+                        message=admin_message,
+                        random_id=0,
+                    )
+                except Exception as exc:
+                    self.logger.warning(
+                        "Не удалось уведомить администратора %s: %s", admin_id, exc
+                    )
+
             delete_booking(record)
             self.reset_context(message.from_id)
             await message.answer(
