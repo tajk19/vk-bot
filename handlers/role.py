@@ -135,7 +135,7 @@ class Role():
         active_bookings: Optional[List[Dict[str, str]]] = None,
     ):
         dates = self.booking_window_dates()
-        if active_bookings is not None:
+        if active_bookings is None:
             dates = [
                 date
                 for date in dates

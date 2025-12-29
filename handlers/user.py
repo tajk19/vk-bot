@@ -37,7 +37,7 @@ from google_sheets import (
     is_time_free,
 )
 from keyboards import (
-    cancellation_keyboard,
+    paginate_buttons,
     user_menu,
     wash_options_keyboard,
 )
@@ -507,14 +507,14 @@ class User(Role):
             await message.answer(
                 "Выберите запись для отмены:\n"
                 f"{details}",
-                keyboard=cancellation_keyboard(bookings),
+                keyboard=paginate_buttons(bookings, target="record", buttons_per_row=1, rows_per_page=8),
             )
 
         @self.labeler.private_message(
             func=lambda m: self.context.get(m.from_id, {}).get("step") == "cancel_select"
             and self.is_user(m)
         )
-        async def handle_cancel_selection(message: Message):#Сделать пагинативную клавиатуру
+        async def handle_cancel_selection(message: Message, page: int = 0):
             context = self.context.get(message.from_id, {})
             payload = self.extract_payload(message)
             action = payload.get("action")
@@ -527,18 +527,33 @@ class User(Role):
                 )
                 return
 
-            if action != "cancel_booking":
+            # if action == "booking_list_page":
+            #     await handle_cancel_list_page(message, payload.get("page", 0))
+            #     return
+        
+            bookings = get_user_active_bookings(message.from_id)
+            
+            if action == "paginate" and payload.get("target") == "record":
+                context = self.context.get(message.from_id, {})
+                context["bookings"] = bookings
+                self.context[message.from_id] = context
+                
+                await show_cancel_page(message, bookings, payload.get("page", 0))
+                return
+            
+            if action != "select":
                 await message.answer(
                     "Выберите запись кнопкой на клавиатуре или нажмите «Вернуться в главное».",
-                    keyboard=cancellation_keyboard(
-                        list(context.get("bookings", {}).values())
+                    keyboard=paginate_buttons(
+                        list(context.get("bookings", {}).values()),
+                        target="record",
+                        buttons_per_row=1,
                     ),
                 )
                 return
 
             row_key = str(payload.get("row"))
-            bookings_map: Dict[str, Dict[str, str]] = context.get("bookings", {})
-            record = bookings_map.get(row_key)
+            record = context.get("bookings", {}).get(row_key)
             if not record:
                 self.reset_context(message.from_id)
                 await message.answer(
@@ -553,6 +568,32 @@ class User(Role):
                 "✅ Запись отменена.",
                 keyboard=user_menu(),
             )
+            
+        # async def handle_cancel_list_page(message: Message, page: int):
+        #     """Обработчик смены страницы"""
+            
+        #     # Получаем все записи из контекста или заново
+        #     context = self.context.get(message.from_id, {})
+        #     bookings = context.get("bookings", get_user_active_bookings(message.from_id))
+            
+        #     await show_cancel_page(message, bookings, page)
+
+        async def show_cancel_page(message: Message, bookings: list, page: int):
+            """Показывает страницу с записями"""
+            rows_per_page = 8
+            keyboard = paginate_buttons(bookings, page=page, target="record", buttons_per_row=1,rows_per_page=rows_per_page)
+            total_pages = max(1, (len(bookings) + rows_per_page-1) // rows_per_page)  # Округление вверх
+            
+            text = f"Список записей (страница {page + 1} из {total_pages}):\nИспользуйте кнопки для выбора записи."
+            
+            await message.answer(text, keyboard=keyboard)
+            
+            # Обновляем контекст
+            context = self.context.get(message.from_id, {})
+            context["bookings"] = bookings
+            context["page"] = page
+            self.context[message.from_id] = context
+
 
         @self.labeler.private_message(text=["мои записи"], func=self.is_user)
         async def my_bookings(message: Message):

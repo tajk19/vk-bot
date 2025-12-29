@@ -250,6 +250,7 @@ def get_cached_bookings(
             "%d.%m.%y %H:%M"
         )
     )
+    
 
     return filtered
 
