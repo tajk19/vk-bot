@@ -86,33 +86,7 @@ class Admin(Role):
             except Exception as exc:
                 self.logger.warning(f"Не удалось отправить уведомление пользователю {user_id}: {exc}")
 
-        async def finalize_rejection(
-            message: Message,
-            record: Dict[str, str],
-            reason: str,
-        ) -> None:
-            # Удаляем запись
-            updated = delete_booking(record)
-            if updated:
-                display_reason = reason if reason else "не указана"
-                await message.answer(
-                    f"❌ Заявка отклонена. Причина: {display_reason}",
-                    keyboard=admin_menu(),
-                )
-
-                await send_user_notification(
-                    record.get("Пользователь_ID"),
-                    "❌ Ваша запись отклонена.\n"
-                    f"Дата: {record['Дата']} {record['Время']}\n"
-                    f"Причина: {display_reason}",
-                )
-
-                self.reset_context(message.from_id)
-            else:
-                await message.answer(
-                    f"❗Ошибка отклонения заявки.\n Возможно она не существует, проверьте наличие записи в таблице и попробуйте еще раз",
-                    keyboard=admin_menu(),
-                )
+        
 
         # @self.labeler.private_message(text=["Админ меню"], func=self.is_admin)
         # async def show_admin_menu(message: Message):
@@ -233,7 +207,35 @@ class Admin(Role):
                 await finalize_rejection(
                     message, record, reason=message.text
                 )
-                return     
+                return
+            
+        async def finalize_rejection(
+            message: Message,
+            record: Dict[str, str],
+            reason: str,
+        ) -> None:
+            # Удаляем запись
+            updated = delete_booking(record)
+            if updated:
+                display_reason = reason if reason else "не указана"
+                await message.answer(
+                    f"❌ Заявка отклонена. Причина: {display_reason}",
+                    keyboard=admin_menu(),
+                )
+
+                await send_user_notification(
+                    record.get("Пользователь_ID"),
+                    "❌ Ваша запись отклонена.\n"
+                    f"Дата: {record['Дата']} {record['Время']}\n"
+                    f"Причина: {display_reason}",
+                )
+
+                self.reset_context(message.from_id)
+            else:
+                await message.answer(
+                    f"❗Ошибка отклонения заявки.\n Возможно она не существует, проверьте наличие записи в таблице и попробуйте еще раз",
+                    keyboard=admin_menu(),
+                )     
 
         @self.labeler.private_message(text=["список записей"], func=self.is_admin)
         async def show_bookings(message: Message):
