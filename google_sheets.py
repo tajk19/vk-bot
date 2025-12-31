@@ -25,7 +25,8 @@ from cache import (
 )
 from config import (
     SPREADSHEET_NAME,
-    DATE_FORMAT
+    DATE_FORMAT,
+    DATETIME_FORMAT
 )
 
 # Путь к JSON-файлу сервисного аккаунта Google
@@ -350,9 +351,13 @@ def update_booking(record: Dict[str, str], updates: Dict[str, str]) -> Dict[str,
 
 
 def delete_booking(record: Dict[str, str]) -> bool:
-    list_sheet.delete_rows(record["_row"])
-    # Инвалидируем кеш бронирований после удаления
-    invalidate_bookings_cache()
+    try:
+        list_sheet.delete_rows(record["_row"])
+        invalidate_bookings_cache()
+        return True
+    except Exception:
+        return False
+
 
 
 def is_time_free(date: datetime.date, time_slot: str) -> bool:
@@ -388,7 +393,7 @@ def set_booking_confirmed(record: Dict[str, str], admin_name: str) -> Dict[str, 
         {
             "Статус": STATUS_CONFIRMED,
             "Подтвердил": admin_name,
-            "Подтверждено в": now,
+            "Подтверждено в": datetime.strftime(now, DATETIME_FORMAT),
             "Причина отказа": "",
         },
     )
@@ -506,19 +511,28 @@ def extract_screen_name_from_url(url: str) -> Optional[str]:
     """
     Извлекает screen_name из URL VK
     Поддерживает форматы:
-    - https://vk.com/nikname228
-    - http://vk.com/nikname228
-    - vk.com/nikname228
-    - @nikname228
+    - https://vk.com/nickname228
+    - http://vk.com/nickname228
+    - vk.com/nickname228
+    - https://vk.ru/nickname228
+    - http://vk.ru/nickname228
+    - vk.ru/nickname228
+    - https://m.vk.com/nickname228
+    - http://m.vk.com/nickname228
+    - m.vk.com/nickname228
+    - https://m.vk.ru/nickname228
+    - http://m.vk.ru/nickname228
+    - m.vk.ru/nickname228
+    - @nickname228
     """
     # Убираем пробелы и приводим к нижнему регистру
     clean_url = url.strip().lower()
     
     # Регулярное выражение для извлечения screen_name
     patterns = [
-        r'(?:https?://)?vk\.com/([^/?&]+)',  # https://vk.com/nikname228
-        r'^@([a-zA-Z0-9_.]+)$',              # @nikname228
-        r'^([a-zA-Z0-9_.]+)$'                # nikname228
+        r'(?:https?://)?(?:m\.)?vk\.(?:ru|com)/([^/?&]+)',  
+        r'^@([a-zA-Z0-9_.]+)$',
+        r'^([a-zA-Z0-9_.]+)$',
     ]
     
     for pattern in patterns:
@@ -548,10 +562,9 @@ async def url_to_user_id(url: str, api: API) -> Optional[int]:
     if not response:
         return None
     
-    if response.type.value == 'user':
+    if getattr(response.type, 'value', None) == 'user':
         return response.object_id
-    else:
-        return None
+    return None
 
 
 def get_blacklist_sync() -> List[str]:
@@ -571,7 +584,7 @@ async def get_blacklist() -> List[str]:
     return get_blacklist_sync()
 
 
-async def add_blacklist(api: API, user_link: str) -> None:
+async def add_blacklist(api: API, user_link: str) -> bool:
     """
     Добавляет пользователя в черный список.
     
@@ -581,20 +594,21 @@ async def add_blacklist(api: API, user_link: str) -> None:
     """
     match = await url_to_user_id(user_link, api)
     if not match:
-        return
+        return False
     vk_link = f"https://vk.com/id{match}"
     blacklist = get_blacklist_sync()
     if vk_link not in blacklist:
         blacklist_sheet.append_row([vk_link])
         # Инвалидируем кеш черного списка после добавления
         invalidate_blacklist_cache()
+    return True
 
 
 def remove_blacklist(user_link: str) -> bool:
     values = blacklist_sheet.get_all_values()
     for idx, row in enumerate(values, start=1):
         if row and row[0] == user_link:
-            blacklist_sheet.delete_row(idx)
+            blacklist_sheet.delete_rows(idx)
             # Инвалидируем кеш черного списка после удаления
             invalidate_blacklist_cache()
             return True

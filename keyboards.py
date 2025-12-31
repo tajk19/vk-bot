@@ -105,7 +105,7 @@ def choice_keyboard(arg_main: str|None, arg_confirm: str|None, arg_reject: str|N
 def back_to_menu_keyboard():
     
     keyboard = Keyboard(one_time=False, inline=False)
-    keyboard.add(Text("Принять", payload={"action": "back_to_menu"}))
+    keyboard.add(Text("Вернуться в главное меню", payload={"action": "back_to_menu"}))
     
     return keyboard
 

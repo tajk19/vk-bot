@@ -65,7 +65,6 @@ class Admin(Role):
             "+ в черный список",
             "- из черного списка",
             "назад",
-            "вернуться в главное меню"
         }
         
         async def send_user_notification(user_id: str, text: str) -> None:
@@ -91,30 +90,29 @@ class Admin(Role):
             message: Message,
             record: Dict[str, str],
             reason: str,
-            persist_context: bool = True,
         ) -> None:
             # Удаляем запись
             updated = delete_booking(record)
-            if persist_context:
-                self.reset_context(message.from_id)
             if updated:
-                await message.answer("Запись была удалена.")
-                return
+                display_reason = reason if reason else "не указана"
+                await message.answer(
+                    f"❌ Заявка отклонена. Причина: {display_reason}",
+                    keyboard=admin_menu(),
+                )
 
-            display_reason = reason if reason else "не указана"
-            await message.answer(
-                f"❌ Заявка отклонена. Причина: {display_reason}",
-                keyboard=admin_menu(),
-            )
+                await send_user_notification(
+                    record.get("Пользователь_ID"),
+                    "❌ Ваша запись отклонена.\n"
+                    f"Дата: {record['Дата']} {record['Время']}\n"
+                    f"Причина: {display_reason}",
+                )
 
-            await send_user_notification(
-                record.get("Пользователь_ID"),
-                "❌ Ваша запись отклонена.\n"
-                f"Дата: {record['Дата']} {record['Время']}\n"
-                f"Причина: {display_reason}",
-            )
-
-            self.reset_context(message.from_id)
+                self.reset_context(message.from_id)
+            else:
+                await message.answer(
+                    f"❗Ошибка отклонения заявки.\n Возможно она не существует, проверьте наличие записи в таблице и попробуйте еще раз",
+                    keyboard=admin_menu(),
+                )
 
         # @self.labeler.private_message(text=["Админ меню"], func=self.is_admin)
         # async def show_admin_menu(message: Message):
@@ -182,7 +180,7 @@ class Admin(Role):
                 updated = set_booking_confirmed(record, admin_name)
                 await message.answer(
                     f"✅ Заявка подтверждена.\n{self.format_booking(updated)}",
-                    keyboard=admin_menu(),
+                    keyboard=back_to_menu_keyboard(),
                 )
                 await send_user_notification(
                     updated.get("Пользователь_ID"),
@@ -233,7 +231,7 @@ class Admin(Role):
             if context and context.get("step") == "reject_reason" and context.get("record"):
                 record = context["record"]
                 await finalize_rejection(
-                    message, record, reason=message.text, persist_context=False
+                    message, record, reason=message.text
                 )
                 return     
 
@@ -618,15 +616,13 @@ class Admin(Role):
 
         @self.labeler.private_message(text=["+ в черный список"], func=self.is_admin)
         async def request_blacklist_add(message: Message):
-            # self.context[message.from_id] = {"step": "blacklist_add"}
-            # await message.answer("Отправьте ссылку пользователя для добавления в черный список.")
-            pass
+            self.context[message.from_id] = {"step": "blacklist_add"}
+            await message.answer("Отправьте ссылку пользователя для добавления в черный список.")
 
         @self.labeler.private_message(text=["- из черного списка"], func=self.is_admin)
         async def request_blacklist_remove(message: Message):
-            # self.context[message.from_id] = {"step": "blacklist_remove"}
-            # await message.answer("Отправьте ссылку пользователя для удаления из черного списка.")
-            pass
+            self.context[message.from_id] = {"step": "blacklist_remove"}
+            await message.answer("Отправьте ссылку пользователя для удаления из черного списка.")
 
         @self.labeler.private_message(
             func=lambda m: self.context.get(m.from_id, {}).get("step")
@@ -634,56 +630,49 @@ class Admin(Role):
             and self.is_admin(m)
         )
         async def handle_blacklist_input(message: Message):
-            # payload = self.extract_payload(message)
-            # action = payload.get("action")
+            payload = self.extract_payload(message)
+            action = payload.get("action")
             
-            # if action == "back_to_menu":
-            #     self.reset_context(message.from_id)
-            #     await message.answer(
-            #         "Разблокировка отменена.",
-            #         keyboard=admin_menu(),
-            #     )
-            #     return
+            if action == "back_to_menu":
+                self.reset_context(message.from_id)
+                await message.answer(
+                    "Разблокировка отменена.",
+                    keyboard=admin_menu(),
+                )
+                return
             
-            # step = self.context.get(message.from_id, {}).get("step")
-            # link = message.text
-            # if step == "blacklist_add":
-            #     await add_blacklist(bot.api, link)
-            #     self.reset_context(message.from_id)
-            #     await message.answer(f"✅ Пользователь {link} добавлен в черный список.")
-            # elif step == "blacklist_remove":
-            #     removed = remove_blacklist(link)
-            #     self.reset_context(message.from_id)
-            #     if removed:
-            #         await message.answer(f"✅ Пользователь {link} удален из черного списка.")
-            #     else:
-            #         await message.answer("❌ Пользователь не найден в черном списке.")
-            # else:
-            #     await message.answer("Сессия истекла. Начните заново.")
-            pass
-
-        # @self.labeler.private_message(
-        #     func=lambda m: self.context.get(m.from_id, {}).get("step") == "reject_reason"
-        #     and self.is_admin(m)
-        # )
-        # async def handle_reject_reason(message: Message):
-        #     context = self.context.get(message.from_id, {})
-        #     record = context.get("record")
-        #     if not record:
-        #         self.reset_context(message.from_id)
-        #         await message.answer("Сессия истекла. Отклонение не выполнено.")
-        #         return
-        #     if self.extract_payload(message):
-        #         await message.answer("Пожалуйста, отправьте причину отказа текстом.")
-        #         return
-        #     reason = (message.text or "").strip()
-        #     if not reason:
-        #         await message.answer(
-        #             "Пожалуйста, укажите причину отказа или повторно нажмите «Отклонить» для отказа без комментария."
-        #         )
-        #         return
-        #     await finalize_rejection(message, record, reason)
-
+            step = self.context.get(message.from_id, {}).get("step")
+            link = message.text
+            if step == "blacklist_add":
+                if await add_blacklist(bot.api, link):
+                    self.reset_context(message.from_id)
+                    await message.answer(
+                        f"✅ Пользователь {link} добавлен в черный список.",
+                        keyboard=admin_menu(),
+                    )
+                else:
+                    await message.answer(
+                        f"❓Пользователь с таким id - {link} не существует",
+                        keyboard=admin_menu(),
+                    )
+            elif step == "blacklist_remove":
+                removed = remove_blacklist(link)
+                self.reset_context(message.from_id)
+                if removed:
+                    await message.answer(
+                        f"✅ Пользователь {link} удален из черного списка.",
+                        keyboard=admin_menu(),
+                    )
+                else:
+                    await message.answer(
+                        "❌ Пользователь не найден в черном списке.",
+                        keyboard=admin_menu(),
+                    )
+            else:
+                await message.answer(
+                    "Сессия истекла. Начните заново.",
+                    keyboard=admin_menu(),
+                )
         @self.labeler.private_message(
             func=lambda m: self.is_admin(m)
             and not self.context.get(m.from_id, {}).get("step")
