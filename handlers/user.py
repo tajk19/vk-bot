@@ -3,7 +3,7 @@
 Обрабатывает запись на стирку, просмотр записей, отмену и другие действия пользователей.
 """
 from handlers.role import Role
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List
 
 # Настройка Pydantic для работы с vkbottle
@@ -18,9 +18,10 @@ from vkbottle.bot import Bot, Message, BotLabeler
 from config import (
     ADMIN_CONTACT_URL,
     ADMIN_IDS,
-    DATE_FORMAT,
     MAX_SLOTS_PER_DAY,
+    DATE_FORMAT,
     TIME_FORMAT,
+    DATETIME_FORMAT,
     WASH_OPTIONS,
     WASH_PRICES,
     format_date_with_weekday,
@@ -40,6 +41,7 @@ from keyboards import (
     paginate_buttons,
     user_menu,
     wash_options_keyboard,
+    choice_keyboard,
 )
 
 class User(Role):
@@ -499,7 +501,7 @@ class User(Role):
 
             context = {
                 "step": "cancel_select",
-                "bookings": {str(record["_row"]): record for record in bookings},
+                "bookings": {record["_row"]: record for record in bookings},
             }
             self.context[message.from_id] = context
 
@@ -532,16 +534,16 @@ class User(Role):
             #     return
         
             bookings = get_user_active_bookings(message.from_id)
+            context["bookings"] = {record["_row"]: record for record in bookings}
+            if payload.get("row") is not None:
+                context["row"] = payload.get("row")
+            self.context[message.from_id] = context
             
-            if action == "paginate" and payload.get("target") == "record":
-                context = self.context.get(message.from_id, {})
-                context["bookings"] = bookings
-                self.context[message.from_id] = context
-                
+            if action == "paginate" and payload.get("target") == "record":               
                 await show_cancel_page(message, bookings, payload.get("page", 0))
                 return
             
-            if action != "select":
+            if action not in ("select", "confirm", "reject"):              
                 await message.answer(
                     "Выберите запись кнопкой на клавиатуре или нажмите «Вернуться в главное».",
                     keyboard=paginate_buttons(
@@ -551,9 +553,9 @@ class User(Role):
                     ),
                 )
                 return
-
-            row_key = str(payload.get("row"))
-            record = context.get("bookings", {}).get(row_key)
+            
+            row_key = context["row"]
+            record = context["bookings"].get(int(row_key))
             if not record:
                 self.reset_context(message.from_id)
                 await message.answer(
@@ -562,31 +564,56 @@ class User(Role):
                 )
                 return
 
-            vk_user = (await message.ctx_api.users.get(message.from_id))[0]
-            full_name = f"{vk_user.first_name} {vk_user.last_name}"
-            user_link = f"https://vk.com/id{message.from_id}"
+            offset = timedelta(hours=3)
+            moscow_tz = timezone(offset, name='МСК')
+            now = datetime.now(moscow_tz)
+            record_datetime = datetime.strptime(
+                f"{record['Дата']} {record['Время']}",
+                DATETIME_FORMAT
+            ).replace(tzinfo=moscow_tz)
+            record_datetime_str = datetime.strftime(record_datetime, DATETIME_FORMAT)
             
-            admin_message = f"Пользователь {full_name} - {user_link} отменил запись {str(record['Дата'])} {str(record['Время'])}",
+            diff_time = record_datetime - now
+            if diff_time.total_seconds() < 3600 and action not in ("confirm", "reject"):
+                await message.answer(
+                    f"Предупреждение!⚠️\nЕсли вы отмените слот {record_datetime_str}, ваши средства не будут возвращены",
+                    keyboard=choice_keyboard(arg_main="cancel_select", arg_confirm="cancel_select", arg_reject="cancel_select"),
+                )
+                return
+            if action in ("select", "confirm"):
+                vk_user = (await message.ctx_api.users.get(message.from_id))[0]
+                full_name = f"{vk_user.first_name} {vk_user.last_name}"
+                user_link = f"https://vk.com/id{message.from_id}"
+                
 
-            for admin_id in ADMIN_IDS:
-                try:
-                    await bot.api.messages.send(
-                        peer_id=admin_id,
-                        message=admin_message,
-                        random_id=0,
-                    )
-                except Exception as exc:
-                    self.logger.warning(
-                        "Не удалось уведомить администратора %s: %s", admin_id, exc
-                    )
+                admin_message = f"Пользователь {full_name} - {user_link} отменил запись {record_datetime_str} " + "без возврата денег" if action == "confirm" else "с возвратом денег"
+               
 
-            delete_booking(record)
-            self.reset_context(message.from_id)
-            await message.answer(
-                "✅ Запись отменена.",
-                keyboard=user_menu(),
-            )
-            
+                for admin_id in ADMIN_IDS:
+                    try:
+                        await bot.api.messages.send(
+                            peer_id=admin_id,
+                            message=admin_message,
+                            random_id=0,
+                        )
+                    except Exception as exc:
+                        self.logger.warning(
+                            "Не удалось уведомить администратора %s: %s", admin_id, exc
+                        )
+
+                delete_booking(record)
+                self.reset_context(message.from_id)
+                await message.answer(
+                    "✅ Запись отменена.",
+                    keyboard=user_menu(),
+                )
+            if action == "reject":
+                details = "\n".join(self.format_booking(record) for record in bookings)
+                await message.answer(
+                    "Выберите запись для отмены:\n"
+                    f"{details}",
+                    keyboard=paginate_buttons(bookings, target="record", buttons_per_row=1, rows_per_page=8),
+                )  
         # async def handle_cancel_list_page(message: Message, page: int):
         #     """Обработчик смены страницы"""
             
@@ -610,15 +637,11 @@ class User(Role):
             context = self.context.get(message.from_id, {})
             context["bookings"] = bookings
             context["page"] = page
-            self.context[message.from_id] = context
-
+            self.context[message.from_id] = context           
 
         @self.labeler.private_message(text=["мои записи"], func=self.is_user)
         async def my_bookings(message: Message):
-            records = sorted(
-                get_user_active_bookings(message.from_id),
-                key=lambda r: (r["Дата"], r["Время"]),
-            )
+            records = get_user_active_bookings(message.from_id)
             if not records:
                 await message.answer(
                     "❌ У вас нет активных записей.",
@@ -643,8 +666,7 @@ class User(Role):
         async def fallback(message: Message):
             await message.answer(
                 f"Всем привет! "
-                "Это бот для записи на стирку.\n"
-                "❗ Чтобы записаться, напишите в ЛС боту ❗\n\n"
+                "Это бот для записи на стирку.\n\n"
                 "Расценки:\n"
                 "• 90 рублей — стирка со своим порошком 🤌\n"
                 "Дополнительно:\n"
@@ -658,7 +680,9 @@ class User(Role):
                 "Важно:\n"
                 "• Приносите вещи за 5–10 минут заранее\n"
                 "• Оставляйте на пороге (внутри)\n"
-                "• Стучаться не нужно ❗❗❗\n"
+                "❗Стучаться не нужно \n"
+                "❗Если отменяете слот менее чем за час до начала, то возврата средств не будет\n"
+                "  Просим отнестись с пониманием 💞\n\n"
                 "💬 Можете писать отзывы и предложения — что добавить или убрать. Будем развиваться 🤗"
             )
             await message.answer(

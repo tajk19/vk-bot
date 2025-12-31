@@ -4,7 +4,7 @@
 Использует кеширование для оптимизации производительности.
 """
 #https://docs.google.com/spreadsheets/d/1s9zB97Qxnp1YpoJMlB9wbRAk_b51D-9cDfBcsQvQu9g/edit?gid=0#gid=0
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import time
 import logging
 import re
@@ -84,8 +84,6 @@ SCHEDULE_HEADER = [
     "Начало",
     "Конец",
 ]
-
-
 
 
 def _ensure_header(ws: gspread.Worksheet, expected_header: List[str]) -> None:
@@ -381,7 +379,10 @@ def get_admin_blockings() -> List[Dict[str, str]]:
 
 
 def set_booking_confirmed(record: Dict[str, str], admin_name: str) -> Dict[str, str]:
-    now = datetime.now().isoformat()
+    offset = timedelta(hours=3)
+    moscow_tz = timezone(offset, name='МСК')
+    now = datetime.now(moscow_tz)
+
     return update_booking(
         record,
         {
@@ -401,12 +402,16 @@ def set_booking_rejected(
     keep_record: bool = True,
 ) -> Optional[Dict[str, str]]:
     if keep_record:
+        offset = timedelta(hours=3)
+        moscow_tz = timezone(offset, name='МСК')
+        now = datetime.now(moscow_tz)
+
         return update_booking(
             record,
             {
                 "Статус": STATUS_REJECTED,
                 "Подтвердил": admin_name,
-                "Подтверждено в": datetime.now().isoformat(),
+                "Подтверждено в": now,
                 "Причина отказа": reason,
             },
         )

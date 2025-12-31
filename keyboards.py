@@ -92,10 +92,20 @@ def wash_options_keyboard(
     keyboard.add(Text("Вернуться в главное меню", payload={"action": "back_to_menu"}))
     return keyboard
 
+def choice_keyboard(arg_main: str|None, arg_confirm: str|None, arg_reject: str|None, ):
+    
+    keyboard = Keyboard(one_time=False, inline=False)
+    keyboard.add(Text("✅ Подтвердить", payload={"step": arg_confirm, "action": "confirm"}))
+    keyboard.add(Text("❌ Отклонить", payload={"step": arg_reject, "action": "reject"}))
+    keyboard.row()
+    keyboard.add(Text("Вернуться в главное меню", payload={"step": arg_main, "action": "back_to_menu"}))
+    
+    return keyboard
+
 def back_to_menu_keyboard():
     
     keyboard = Keyboard(one_time=False, inline=False)
-    keyboard.add(Text("Вернуться в главное меню", payload={"action": "back_to_menu"}))
+    keyboard.add(Text("Принять", payload={"action": "back_to_menu"}))
     
     return keyboard
 
@@ -255,7 +265,7 @@ def paginate_buttons(
             record = item
         else:
             record = str(item["Дата"]) + " " + str(item["Время"])
-            payload = {"action": "select", "target": target, "row": item["_row"], "value": record}
+            payload = {"action": "select", "target": target, "row": str(item["_row"]), "value": record}
 
         
         keyboard.add(Text(record, payload=payload))

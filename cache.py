@@ -9,7 +9,10 @@ import time
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from config import DATETIME_FORMAT
+
 logger = logging.getLogger(__name__)
+
 
 
 class CacheEntry:
@@ -247,7 +250,7 @@ def get_cached_bookings(
     filtered.sort(
         key=lambda r: datetime.strptime(
             r.get("Дата").strip() + " " + r.get("Время").strip(),
-            "%d.%m.%y %H:%M"
+            DATETIME_FORMAT,
         )
     )
     

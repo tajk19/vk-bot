@@ -46,6 +46,7 @@ NOTIFY_AFTER_MIN = int(os.getenv("NOTIFY_AFTER_MIN", "60"))
 WEEKDAYS_SHORT_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
 DATE_FORMAT = "%d.%m.%y"
 TIME_FORMAT = "%H:%M"
+DATETIME_FORMAT = "%d.%m.%y %H:%M"
 
 
 WASH_OPTIONS = ["Без добавок", "Отбеливатель", "Порошок", "Кондиционер", "Гель"]
@@ -66,7 +67,7 @@ def convert_from_format_with_weekday(value: str) -> Optional[date]:
 
         return datetime.strptime(
             date_part,
-            "%d.%m.%y"
+            DATE_FORMAT,
         ).date()
     except IndexError:
         return None
