@@ -494,7 +494,7 @@ class User(Role):
                 full_name = f"{vk_user.first_name} {vk_user.last_name}"
                 user_link = f"https://vk.com/id{message.from_id}"
 
-                admin_message = f"Пользователь {full_name} - {user_link} отменил запись {record_datetime_str} " + "без возврата денег" if action == "confirm" else "с возвратом денег"
+                admin_message = f"Пользователь {full_name} - {user_link} отменил запись {record_datetime_str} " + ("без возврата денег" if action == "confirm" else "с возвратом денег")
                
                 for admin_id in ADMIN_IDS:
                     try:
