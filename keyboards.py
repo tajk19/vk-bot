@@ -92,6 +92,7 @@ def wash_options_keyboard(
     keyboard.add(Text("Вернуться в главное меню", payload={"action": "back_to_menu"}))
     return keyboard
 
+
 def choice_keyboard(arg_main: str|None, arg_confirm: str|None, arg_reject: str|None, ):
     
     keyboard = Keyboard(one_time=False, inline=False)
@@ -102,38 +103,13 @@ def choice_keyboard(arg_main: str|None, arg_confirm: str|None, arg_reject: str|N
     
     return keyboard
 
+
 def back_to_menu_keyboard():
     
     keyboard = Keyboard(one_time=False, inline=False)
     keyboard.add(Text("Вернуться в главное меню", payload={"action": "back_to_menu"}))
     
     return keyboard
-
-# def cancellation_keyboard(bookings: Sequence[dict]) -> Keyboard:
-#     """
-#     Создает клавиатуру для выбора записи для отмены.
-    
-#     Args:
-#         bookings: Список записей для отмены
-        
-#     Returns:
-#         Keyboard объект с кнопками записей
-#     """
-#     keyboard = Keyboard(inline=False)
-#     for booking in bookings:
-#         label = f"{booking['Дата']} {booking['Время']}"
-#         keyboard.add(
-#             Text(
-#                 label,
-#                 payload={
-#                     "action": "cancel_booking",
-#                     "row": booking["_row"],
-#                 },
-#             )
-#         )
-#         keyboard.row()
-#     keyboard.add(Text("Вернуться в главное меню", payload={"action": "back_to_menu"}))
-#     return keyboard
 
 
 def pending_decision_keyboard(row: int) -> Keyboard:
@@ -160,82 +136,6 @@ def pending_decision_keyboard(row: int) -> Keyboard:
         )
     )
     return keyboard
-
-
-# def unblock_keyboard(blockings: Sequence[dict]) -> Keyboard:
-#     """
-#     Создает клавиатуру для выбора заблокированного слота для разблокировки.
-    
-#     Args:
-#         blockings: Список заблокированных слотов
-        
-#     Returns:
-#         Keyboard объект с кнопками слотов
-#     """
-#     keyboard = Keyboard(one_time=False, inline=False)
-#     for record in blockings:
-#         label = f"{record['Дата']} {record['Время']}"
-#         keyboard.add(
-#             Text(
-#                 label,
-#                 payload={"action": "admin_unblock", "row": record["_row"]},
-#             )
-#         )
-#         keyboard.row()
-#     keyboard.add(Text("Вернуться в главное меню", payload={"action": "back_to_menu"}))
-#     return keyboard
-
-
-
-# def booking_list_keyboard(
-#     bookings: Sequence[dict],
-#     page: int = 0,
-#     buttons_per_row: int = 1,
-#     rows_per_page: int = 5,
-# ) -> Keyboard:
-#     """
-#     Клавиатура для списка записей с пагинацией.
-#     """
-#     start_idx = page * buttons_per_row * rows_per_page
-#     end_idx = start_idx + buttons_per_row * rows_per_page
-#     page_items = bookings[start_idx:end_idx]
-    
-#     keyboard = Keyboard(one_time=True, inline=False)
-#     for idx, item in enumerate(page_items):
-#         label = f"{item['Дата']} {item['Время']}\n{item['Пользователь']}"
-#         keyboard.add(
-#             Text(
-#                 label,
-#                 payload={"action": "admin_complete_booking", "row": item["_row"]},
-#             )
-#         )
-#         keyboard.row()
-        
-    
-#     has_prev = start_idx > 0
-#     has_next = end_idx < len(bookings)
-
-#     if has_prev or has_next:
-#         if has_prev:
-#             keyboard.add(
-#                 Text(
-#                     "← Предыдущие",
-#                     payload={"action": "booking_list_page", "page": page - 1},
-#                 )
-#             )
-#         if has_next:
-#             keyboard.add(
-#                 Text(
-#                     "Следующие →",
-#                     payload={"action": "booking_list_page", "page": page + 1},
-#                 )
-#             )
-#         keyboard.row()
-
-#     keyboard.add(Text("Вернуться в главное меню", payload={"action": "back_to_menu"}))
-         
-#     return keyboard
-
 
 
 def paginate_buttons(

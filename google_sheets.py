@@ -511,6 +511,7 @@ def extract_screen_name_from_url(url: str) -> Optional[str]:
     """
     Извлекает screen_name из URL VK
     Поддерживает форматы:
+    
     - https://vk.com/nickname228
     - http://vk.com/nickname228
     - vk.com/nickname228

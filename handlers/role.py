@@ -28,8 +28,7 @@ class Role():
     commands = {}
     
     context: Dict[int, Dict[str, Any]] = defaultdict(dict)
-    
-    
+      
     def extract_payload(self, message: Message) -> Dict[str, Any]:
         payload = message.payload
         if not payload:

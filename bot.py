@@ -40,10 +40,6 @@ init_cache(default_ttl=CACHE_TTL)
 
 # Создаем объект бота
 bot = Bot(token=VK_TOKEN)
-#bot.labeler.vbml_ignore_case = True
-
-# Регистрируем обработчики команд
-
 
 user = User(bot)
 admin = Admin(bot)

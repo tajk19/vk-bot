@@ -64,7 +64,6 @@ class Admin(Role):
             "черный список",
             "+ в черный список",
             "- из черного списка",
-            "назад",
         }
         
         async def send_user_notification(user_id: str, text: str) -> None:
@@ -86,17 +85,10 @@ class Admin(Role):
             except Exception as exc:
                 self.logger.warning(f"Не удалось отправить уведомление пользователю {user_id}: {exc}")
 
-        
-
-        # @self.labeler.private_message(text=["Админ меню"], func=self.is_admin)
-        # async def show_admin_menu(message: Message):
-        #     await message.answer(
-        #         "Админ меню:",
-        #         keyboard=admin_menu(),
-        #     )
 
         @self.labeler.private_message(text=["неподтвержденные"], func=self.is_admin)
         async def pending_list(message: Message):
+            self.reset_context(message.from_id)
             records = get_pending_bookings()
             if not records:
                 await message.answer("📭 Нет заявок, ожидающих подтверждения.")
@@ -107,7 +99,9 @@ class Admin(Role):
                 keyboard=back_to_menu_keyboard())
             
             for record in records:
+                self.reset_context(message.from_id)
                 self.context[message.from_id] = {"step": "confirm_records"}
+                
                 date = format_date_with_weekday(datetime.strptime(record['Дата'], DATE_FORMAT).date())
                 details = (
                     f"Заявка №{record['_row']}:\n"
@@ -183,6 +177,7 @@ class Admin(Role):
                     f"{record['Пользователь']} ({record['Дата']} {record['Время']}):"
                 )
                 return
+          
             
         @self.labeler.private_message(
             func=lambda m: self.context.get(m.from_id, {}).get("step") == "reject_reason"
@@ -191,6 +186,8 @@ class Admin(Role):
         async def reject_record(message: Message):
             payload = self.extract_payload(message)
             action = payload.get("action")
+            if not action:
+                return
             
             if action == "back_to_menu":
                 self.reset_context(message.from_id)
@@ -237,8 +234,10 @@ class Admin(Role):
                     keyboard=admin_menu(),
                 )     
 
+
         @self.labeler.private_message(text=["список записей"], func=self.is_admin)
         async def show_bookings(message: Message):
+            self.reset_context(message.from_id)
             # Показываем только подтвержденные записи для завершения
             bookings = get_bookings(statuses={STATUS_CONFIRMED})
 
@@ -249,6 +248,7 @@ class Admin(Role):
                 )
                 return
             
+            self.reset_context(message.from_id)
             self.context[message.from_id] = {
                 "step": "booking_list",
                 "bookings": {str(record["_row"]): record for record in bookings},
@@ -256,6 +256,7 @@ class Admin(Role):
             
             chunks: List[str] = []
             current_chunk: List[str] = []
+            
             for record in bookings:
                 entry = self.format_booking(record)
                 current_chunk.append(entry)
@@ -275,6 +276,7 @@ class Admin(Role):
                 else:
                     await message.answer(f"📋 Записи:\n{chunk}")
         
+        
         @self.labeler.private_message(
             func=lambda m: self.context.get(m.from_id, {}).get("step") == "booking_list"
             and self.is_admin(m)
@@ -282,6 +284,8 @@ class Admin(Role):
         async def handle_booking_list_selection(message: Message, page: int = 0):            
             payload = self.extract_payload(message)
             action = payload.get("action")
+            if not action:
+                return
             
             if action == "back_to_menu":
                 self.reset_context(message.from_id)
@@ -290,30 +294,46 @@ class Admin(Role):
                     keyboard=admin_menu(),
                 )
                 return
+
+            bookings = self.context.get("bookings")
+            if bookings is None:
+                bookings = get_bookings(statuses={STATUS_CONFIRMED})
+                self.context[message.from_id]["bookings"] = bookings
             
-            # # Обработка пагинации
-            # if action == "booking_list_page":
-            #     await handle_booking_list_page(message, payload.get("page", 0))
-            #     return
-        
-            
-            # Получаем ВСЕ записи для контекста
-            bookings = get_bookings(statuses={STATUS_CONFIRMED})
-            
-            if action != "admin_complete_booking":
-                # Сохраняем все записи в контекст для последующего использования
+            if action == "paginate":
                 context = self.context.get(message.from_id, {})
                 context["bookings"] = bookings
                 self.context[message.from_id] = context
                 
-                # Показываем первую страницу
                 await show_booking_page(message, bookings, payload.get("page", 0))
                 return
             
-            # Обработка завершения записи
-            row_key = str(payload.get("row"))
+            if action != "select":
+                chunks: List[str] = []
+                current_chunk: List[str] = []
+                
+                for record in bookings:
+                    entry = self.format_booking(record)
+                    current_chunk.append(entry)
+                    if len("\n".join(current_chunk)) > 3500:
+                        chunks.append("\n".join(current_chunk))
+                        current_chunk = []
+                if current_chunk:
+                    chunks.append("\n".join(current_chunk))
+                
+                for i, chunk in enumerate(chunks):
+                    if i == len(chunks) - 1:
+                        # Последний чанк с клавиатурой
+                        await message.answer(
+                            f"❌ Пожалуйста, выберите подтвержденные записи с клавиатуры!\n(выберите для завершения):\n{chunk}",
+                            keyboard=paginate_buttons(bookings, target="record", buttons_per_row=1, rows_per_page=8),
+                        )
+                    else:
+                        await message.answer(f"📋 Записи:\n{chunk}")
+                
+                return
             
-            # Ищем запись во всех бронированиях
+            row_key = str(payload.get("row"))
             target_booking = None
             for booking in bookings:
                 if str(booking.get("_row")) == row_key:
@@ -325,7 +345,6 @@ class Admin(Role):
                 await message.answer("Не удалось найти запись. Попробуйте снова.")
                 return
             
-            # Отправляем уведомление клиенту
             user_id = target_booking.get("Пользователь_ID")
             if user_id:
                 try:
@@ -337,8 +356,7 @@ class Admin(Role):
                     )
                 except Exception as exc:
                     self.logger.warning(f"Не удалось отправить уведомление пользователю {user_id}: {exc}")
-            
-            # Удаляем запись
+        
             complete_booking(target_booking)
             self.reset_context(message.from_id)
             
@@ -347,15 +365,6 @@ class Admin(Role):
                 f"Клиент {target_booking.get('Пользователь', 'неизвестен')} уведомлен.",
                 keyboard=admin_menu(),
             )
-
-        # async def handle_booking_list_page(message: Message, page: int):
-        #     """Обработчик смены страницы"""
-            
-        #     # Получаем все записи из контекста или заново
-        #     context = self.context.get(message.from_id, {})
-        #     all_bookings = context.get("bookings", get_bookings(statuses={STATUS_CONFIRMED}))
-            
-        #     await show_booking_page(message, all_bookings, page)
 
         async def show_booking_page(message: Message, all_bookings: list, page: int):
             """Показывает страницу с записями"""
@@ -373,13 +382,16 @@ class Admin(Role):
             context["page"] = page
             self.context[message.from_id] = context
 
-        @self.labeler.private_message(text=["Блокировать слот"], func=self.is_admin)
+
+        @self.labeler.private_message(text=["блокировать слот"], func=self.is_admin)
         async def start_block_slot(message: Message):
+            self.reset_context(message.from_id)
             self.context[message.from_id] = {"step": "block_date"}
             await message.answer(
                 "Выберите дату для блокировки:",
                 keyboard=self.date_keyboard(),
             )
+
 
         @self.labeler.private_message(
             func=lambda m: self.context.get(m.from_id, {}).get("step") == "block_date"
@@ -387,6 +399,8 @@ class Admin(Role):
         async def handle_block_date(message: Message):
             payload = self.extract_payload(message)
             action = payload.get("action")
+            if not action:
+                return
             
             if action == "back_to_menu":
                 self.reset_context(message.from_id)
@@ -398,7 +412,7 @@ class Admin(Role):
             
             context = self.context.get(message.from_id)
             active_bookings = context.get("active_bookings")
-            if action == "paginate" and payload.get("target") == "date":
+            if action == "paginate":
                 page = payload.get("page", 0)
                 await message.answer(
                     "Выберите дату для блокировки:",
@@ -406,11 +420,14 @@ class Admin(Role):
                 )
                 return
 
-            if action == "select" and payload.get("target") == "date":
-                date_text = payload.get("value")
-            else:
-                date_text = message.text.strip()
-
+            if action != "select":
+                await message.answer(
+                    "❌ Пожалуйста, выберите дату с клавиатуры.",
+                    keyboard=self.date_keyboard(),
+                )
+                return
+                    
+            date_text = payload.get("value")
             try:
                 selected_date = convert_from_format_with_weekday(date_text)
             except ValueError:
@@ -428,6 +445,7 @@ class Admin(Role):
                 keyboard=keyboard,
             )
 
+
         @self.labeler.private_message(
             func=lambda m: self.context.get(m.from_id, {}).get("step") == "block_time"
             and self.is_admin(m)
@@ -436,6 +454,8 @@ class Admin(Role):
             context = self.context.get(message.from_id)
             payload = self.extract_payload(message)
             action = payload.get("action")
+            if not action:
+                return
             
             selected_date: datetime.date = context["date"] 
             if not selected_date:
@@ -462,7 +482,7 @@ class Admin(Role):
                 )
                 return
 
-            if action == "paginate" and payload.get("target") == "time":
+            if action == "paginate":
                 page = payload.get("page", 0)
                 _, keyboard = self.time_keyboard(selected_date=selected_date, active_bookings=active_bookings, page=page)
                 await message.answer(
@@ -471,7 +491,7 @@ class Admin(Role):
                 )
                 return
 
-            if action == "select" and payload.get("target") == "time":
+            if action == "select":
                 time_text = payload.get("value")
             else:
                 time_text = message.text.strip()
@@ -511,8 +531,10 @@ class Admin(Role):
                 keyboard=admin_menu(),
             )
 
-        @self.labeler.private_message(text=["Разблокировать слот"], func=self.is_admin)
+
+        @self.labeler.private_message(text=["разблокировать слот"], func=self.is_admin)
         async def start_unblock(message: Message):
+            self.reset_context(message.from_id)
             bookings = get_admin_blockings()
             if not bookings:
                 await message.answer("Нет заблокированных слотов.")
@@ -526,6 +548,7 @@ class Admin(Role):
                 keyboard=paginate_buttons(bookings, target="record", buttons_per_row=1),
             )
 
+
         @self.labeler.private_message(
             func=lambda m: self.context.get(m.from_id, {}).get("step") == "unblock_select"
             and self.is_admin(m)
@@ -533,6 +556,8 @@ class Admin(Role):
         async def handle_unblock_selection(message: Message, page: int = 0):
             payload = self.extract_payload(message)
             action = payload.get("action")
+            if not action:
+                return
 
             if action == "back_to_menu":
                 self.reset_context(message.from_id)
@@ -541,14 +566,10 @@ class Admin(Role):
                     keyboard=admin_menu(),
                 )
                 return
-            
-            # if action == "booking_list_page":
-            #     await handle_blockings_list_page(message, payload.get("page", 0))
-            #     return
         
             bookings = get_admin_blockings()
             
-            if action == "paginate" and payload.get("target") == "record":
+            if action == "paginate":
                 context = self.context.get(message.from_id, {})
                 context["bookings"] = bookings
                 self.context[message.from_id] = context
@@ -578,15 +599,6 @@ class Admin(Role):
                 "✅ Слот разблокирован.",
                 keyboard=admin_menu(),
             )
-        
-        # async def handle_blockings_list_page(message: Message, page: int):
-        #     """Обработчик смены страницы"""
-            
-        #     # Получаем все записи из контекста или заново
-        #     context = self.context.get(message.from_id, {})
-        #     bookings = context.get("bookings", get_admin_blockings())
-            
-        #     await show_blockings_page(message, bookings, page)
 
         async def show_blockings_page(message: Message, all_bookings: list, page: int):
             """Показывает страницу с записями"""
@@ -607,6 +619,7 @@ class Admin(Role):
 
         @self.labeler.private_message(text=["черный список"], func=self.is_admin)
         async def request_blacklist(message: Message):
+            self.reset_context(message.from_id)
             blacklist = await get_blacklist()
             if blacklist:
                 for user in blacklist:
@@ -614,17 +627,26 @@ class Admin(Role):
             else:
                 await message.answer("Черный список пуст")
 
-            
 
         @self.labeler.private_message(text=["+ в черный список"], func=self.is_admin)
         async def request_blacklist_add(message: Message):
+            self.reset_context(message.from_id)
             self.context[message.from_id] = {"step": "blacklist_add"}
-            await message.answer("Отправьте ссылку пользователя для добавления в черный список.")
+            await message.answer(
+                "Отправьте ссылку пользователя для добавления в черный список.",
+                keyboard=back_to_menu_keyboard()
+            )
+
 
         @self.labeler.private_message(text=["- из черного списка"], func=self.is_admin)
         async def request_blacklist_remove(message: Message):
+            self.reset_context(message.from_id)
             self.context[message.from_id] = {"step": "blacklist_remove"}
-            await message.answer("Отправьте ссылку пользователя для удаления из черного списка.")
+            await message.answer(
+                "Отправьте ссылку пользователя для удлаения из черного списка.",
+                keyboard=back_to_menu_keyboard()
+            )
+
 
         @self.labeler.private_message(
             func=lambda m: self.context.get(m.from_id, {}).get("step")
@@ -634,6 +656,8 @@ class Admin(Role):
         async def handle_blacklist_input(message: Message):
             payload = self.extract_payload(message)
             action = payload.get("action")
+            if not action:
+                return
             
             if action == "back_to_menu":
                 self.reset_context(message.from_id)
@@ -675,6 +699,8 @@ class Admin(Role):
                     "Сессия истекла. Начните заново.",
                     keyboard=admin_menu(),
                 )
+        
+        
         @self.labeler.private_message(
             func=lambda m: self.is_admin(m)
             and not self.context.get(m.from_id, {}).get("step")
@@ -683,7 +709,3 @@ class Admin(Role):
         )
         async def admin_fallback(message: Message):
             await message.answer("Админ меню:", keyboard=admin_menu())
-
-        # @self.labeler.private_message(func=self.is_admin)
-        # async def handle_admin_payloads(message: Message):
-

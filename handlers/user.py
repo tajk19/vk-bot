@@ -56,105 +56,14 @@ class User(Role):
         option = record.get("Опция стирки") or "Без добавок"
         return f"{format_date_with_weekday(datetime.strptime(record['Дата'], DATE_FORMAT))} {record['Время']} — ({option})"
 
-    
-    HELP_TEXT = (
-        "Доступные команды:\n"
-        "• «Записаться» — выбрать дату, время и опции\n"
-        "• «Мои записи» — посмотреть активные брони\n"
-        "• «Отменить запись» — отменить конкретную запись\n"
-        "• «Связаться с админом» — получить контакт\n"
-        "• «Привет» или «Начать» или «Старт»  — показать меню заново"
-    )
-
-    # Храним ID последних сообщений бота для каждого пользователя
-    # last_bot_messages: Dict[int, int] = {}
-
-    # async def answer_and_delete_previous(message: Message, text: str, **kwargs) -> None:
-    #     """
-    #     Отправляет сообщение и удаляет предыдущее сообщение бота для этого пользователя.
-    #     """
-    #     user_id = message.from_id
-    #     peer_id = message.peer_id
-        
-    #     # Удаляем предыдущее сообщение бота, если оно есть
-    #     if user_id in last_bot_messages:
-    #         try:
-    #             result = await message.ctx_api.messages.delete(
-    #                 message_ids=[last_bot_messages[user_id]],
-    #                 delete_for_all=True
-    #             )
-    #             self.logger.info(f"Удалено сообщение {last_bot_messages[user_id]}, результат: {result}")
-    #         except Exception as exc:
-    #             # Игнорируем ошибки удаления (сообщение могло быть уже удалено или недоступно)
-    #             self.logger.warning(f"Не удалось удалить предыдущее сообщение {last_bot_messages[user_id]}: {exc}")
-        
-    #     # Извлекаем keyboard из kwargs, если есть
-    #     keyboard = kwargs.get('keyboard')
-        
-    #     # Отправляем новое сообщение через API напрямую, чтобы получить message_id
-    #     try:
-    #         random_id = random.randint(0, 2**31 - 1)
-            
-    #         # Подготавливаем параметры для отправки
-    #         send_params = {
-    #             "peer_id": peer_id,
-    #             "message": text,
-    #             "random_id": random_id,
-    #         }
-            
-    #         # Добавляем keyboard, если есть
-    #         if keyboard:
-    #             # В vkbottle Keyboard имеет метод get_json() для получения JSON строки
-    #             if hasattr(keyboard, 'get_json'):
-    #                 send_params["keyboard"] = keyboard.get_json()
-    #             elif hasattr(keyboard, 'json'):
-    #                 send_params["keyboard"] = keyboard.json
-    #             else:
-    #                 # Если keyboard - это строка, используем её напрямую
-    #                 send_params["keyboard"] = str(keyboard)
-            
-    #         # Отправляем сообщение
-    #         result = await message.ctx_api.messages.send(**send_params)
-            
-    #         # Сохраняем message_id из ответа
-    #         # В VK API messages.send возвращает message_id как int
-    #         message_id = None
-    #         if isinstance(result, int):
-    #             message_id = result
-    #         elif hasattr(result, 'message_id'):
-    #             message_id = result.message_id
-    #         elif isinstance(result, dict):
-    #             if 'message_id' in result:
-    #                 message_id = result['message_id']
-    #             elif 'response' in result:
-    #                 response = result['response']
-    #                 if isinstance(response, int):
-    #                     message_id = response
-    #                 elif isinstance(response, dict) and 'message_id' in response:
-    #                     message_id = response['message_id']
-            
-    #         if message_id:
-    #             last_bot_messages[user_id] = message_id
-    #             self.logger.info(f"Отправлено сообщение пользователю {user_id}, message_id: {message_id}")
-    #         else:
-    #             self.logger.warning(f"Не удалось получить message_id из ответа: {result}")
-            
-    #     except Exception as exc:
-    #         self.logger.error(f"Ошибка при отправке сообщения: {exc}", exc_info=True)
-    #         # Fallback: используем обычный message.answer
-    #         await message.answer(text, **kwargs)
-
-
     def register(self, bot: Bot):
-
-        user_commands = {
-            "записаться",
-            "отменить запись",
-            "мои записи",
+        user_commands = [
             "связаться с админом",
             "связаться с администратором",
-        }
-
+            "записаться",
+            "отменить запись",
+            "мои записи"
+        ]
         @self.labeler.private_message(
             text=["связаться с админом", "связаться с администратором"]
         )
@@ -166,20 +75,17 @@ class User(Role):
 
         @self.labeler.private_message(text=["записаться"], func=self.is_user)
         async def start_booking(message: Message):
-            # Быстрая проверка черного списка (синхронная, без await)
+            
             user_link = f"https://vk.com/id{message.from_id}"
             blacklist = await get_blacklist()
             if user_link in blacklist:
                 await message.answer("❌ Вы в черном списке и не можете записываться.")
                 return
 
-            # Отправляем быстрый ответ пользователю
             await message.answer("⏳ Загрузка доступных дат...")
             
-            # Получаем активные записи
             active_bookings = get_bookings(statuses=ACTIVE_STATUSES)
             
-            # Быстрая проверка доступности дат
             if not self.available_dates(active_bookings):
                 await message.answer(
                     "❌ Сейчас нет свободных слотов для записи.\n"
@@ -188,7 +94,6 @@ class User(Role):
                 )
                 return
 
-            # Сначала отчищаем, потом сохраняем контекст и отправляем клавиатуру с датами
             self.reset_context(message.from_id)
             self.context[message.from_id] = {
                 "step": "choose_date",
@@ -207,6 +112,9 @@ class User(Role):
             payload = self.extract_payload(message)
             active_bookings = self.context[message.from_id].get("active_bookings")
             action = payload.get("action")
+            if not action:
+                return
+            
             if active_bookings is None:
                 active_bookings = get_bookings(statuses=ACTIVE_STATUSES)
                 self.context[message.from_id]["active_bookings"] = active_bookings
@@ -219,7 +127,7 @@ class User(Role):
                 )
                 return
 
-            if action == "paginate" and payload.get("target") == "date":
+            if action == "paginate":
                 page = payload.get("page", 0)
                 await message.answer(
                     "Выберите дату для записи:",
@@ -227,10 +135,14 @@ class User(Role):
                 )
                 return
 
-            if action == "select" and payload.get("target") == "date":
-                date_text = payload.get("value")
-            else:
-                date_text = message.text.strip()
+            if action != "select":
+                await message.answer(
+                    "❌ Пожалуйста, выберите дату с клавиатуры.",
+                    keyboard=self.date_keyboard(active_bookings=active_bookings),
+                )
+                return
+                
+            date_text = payload.get("value")
 
             try:
                 selected_date = convert_from_format_with_weekday(date_text)
@@ -256,7 +168,7 @@ class User(Role):
                     keyboard=self.date_keyboard(active_bookings=active_bookings),
                 )
                 return
-
+            
             self.context[message.from_id]["date"] = selected_date
             self.context[message.from_id]["step"] = "choose_time"
             await message.answer(
@@ -277,15 +189,12 @@ class User(Role):
                     keyboard=user_menu(),
                 )
                 return
-
-            selected_date: datetime.date = context["date"]
+        
             payload = self.extract_payload(message)
             action = payload.get("action")
-            active_bookings = context.get("active_bookings")
-            if active_bookings is None:
-                active_bookings = get_bookings(statuses=ACTIVE_STATUSES)
-                context["active_bookings"] = active_bookings
-
+            if not action:
+                return
+            
             if action == "back_to_menu":
                 self.reset_context(message.from_id)
                 await message.answer(
@@ -293,18 +202,22 @@ class User(Role):
                     keyboard=user_menu(),
                 )
                 return
-            
-            if action == "one_step_back" and context["step"] == "choose_time":
-                self.context[message.from_id].pop("date")
+
+            selected_date = context["date"]
+            active_bookings = context.get("active_bookings")
+            if active_bookings is None:
+                active_bookings = get_bookings(statuses=ACTIVE_STATUSES)
+                context["active_bookings"] = active_bookings
+
+            if action == "one_step_back":
                 self.context[message.from_id]["step"] = "choose_date"
-                page = 0
                 await message.answer(
                     "Выберите дату для записи:",
-                    keyboard=self.date_keyboard(page=page, active_bookings=active_bookings),
+                    keyboard=self.date_keyboard(page=0, active_bookings=active_bookings),
                 )
                 return
                 
-            if action == "paginate" and payload.get("target") == "time":
+            if action == "paginate":
                 page = payload.get("page", 0)
                 _, keyboard = self.time_keyboard(selected_date=selected_date, page=page)
                 await message.answer(
@@ -313,7 +226,7 @@ class User(Role):
                 )
                 return
 
-            if action == "select" and payload.get("target") == "time":
+            if action == "select":
                 time_text = payload.get("value")
             else:
                 time_text = message.text.strip()
@@ -339,7 +252,7 @@ class User(Role):
             bookings_same_day = [
                 record
                 for record in get_user_active_bookings(message.from_id)
-                if record.get("Дата") == selected_date
+                if record.get("Дата") == datetime.strftime(selected_date, DATE_FORMAT)
             ]
             if len(bookings_same_day) >= MAX_SLOTS_PER_DAY:
                 self.reset_context(message.from_id)
@@ -349,9 +262,8 @@ class User(Role):
                 )
                 return
 
-            context["time"] = time_text
             context["step"] = "choose_options"
-            context["options"] = []
+            context["time"] = time_text
             context["price"] = WASH_PRICES["Без добавок"]
             await message.answer(
                 "Выберите дополнительные опции (по желанию):",
@@ -373,9 +285,10 @@ class User(Role):
                 return
 
             payload = self.extract_payload(message)
-            selected_options: List[str] = context.get("options", [])
-            selected_date: datetime.date = context["date"]   
             action = payload.get("action")
+            
+            if not action:
+                return
             
             if action == "back_to_menu":
                 self.reset_context(message.from_id)
@@ -386,17 +299,18 @@ class User(Role):
                 return
             
             if action == "one_step_back":
-                self.context[message.from_id].pop("time")
+                context.pop("time")
+                context.pop("price") 
                 self.context[message.from_id]["step"] = "choose_time"
-                self.context[message.from_id].pop("options") 
-                self.context[message.from_id].pop("price")
-
-                page = 0
                 await message.answer(
                     "Выберите дату для записи:",
-                    keyboard=self.time_keyboard(page=page, selected_date=selected_date),
+                    keyboard=self.time_keyboard(page=0, selected_date=selected_date),
                 )
                 return
+            
+            
+            selected_options = context.get("options", [])
+            selected_date = context["date"]  
             
             if action == "toggle_option":
                 option_value = payload.get("value")
@@ -434,7 +348,7 @@ class User(Role):
                 )
                 return
 
-            time_text: str = context["time"]
+            time_text = context["time"]
             if not is_time_free(selected_date, time_text):
                 self.reset_context(message.from_id)
                 await message.answer(
@@ -490,7 +404,6 @@ class User(Role):
 
         @self.labeler.private_message(text=["отменить запись"], func=self.is_user)
         async def cancel_booking(message: Message):
-            self.reset_context(message.from_id)
             bookings = get_user_active_bookings(message.from_id)
             if not bookings:
                 await message.answer(
@@ -498,7 +411,8 @@ class User(Role):
                     keyboard=user_menu(),
                 )
                 return
-
+            
+            self.reset_context(message.from_id)
             context = {
                 "step": "cancel_select",
                 "bookings": {record["_row"]: record for record in bookings},
@@ -517,9 +431,10 @@ class User(Role):
             and self.is_user(m)
         )
         async def handle_cancel_selection(message: Message, page: int = 0):
-            context = self.context.get(message.from_id, {})
             payload = self.extract_payload(message)
             action = payload.get("action")
+            if not action:
+                return
 
             if action == "back_to_menu":
                 self.reset_context(message.from_id)
@@ -528,29 +443,23 @@ class User(Role):
                     keyboard=user_menu(),
                 )
                 return
-
-            # if action == "booking_list_page":
-            #     await handle_cancel_list_page(message, payload.get("page", 0))
-            #     return
         
+            context = self.context.get(message.from_id, {})
             bookings = get_user_active_bookings(message.from_id)
             context["bookings"] = {record["_row"]: record for record in bookings}
+            
             if payload.get("row") is not None:
                 context["row"] = payload.get("row")
             self.context[message.from_id] = context
             
-            if action == "paginate" and payload.get("target") == "record":               
+            if action == "paginate":               
                 await show_cancel_page(message, bookings, payload.get("page", 0))
                 return
             
             if action not in ("select", "confirm", "reject"):              
                 await message.answer(
                     "Выберите запись кнопкой на клавиатуре или нажмите «Вернуться в главное».",
-                    keyboard=paginate_buttons(
-                        list(context.get("bookings", {}).values()),
-                        target="record",
-                        buttons_per_row=1,
-                    ),
+                    keyboard=paginate_buttons(bookings, target="record", buttons_per_row=1, rows_per_page=8),
                 )
                 return
             
@@ -574,7 +483,7 @@ class User(Role):
             record_datetime_str = datetime.strftime(record_datetime, DATETIME_FORMAT)
             
             diff_time = record_datetime - now
-            if diff_time.total_seconds() < 3600 and action not in ("confirm", "reject"):
+            if diff_time.total_seconds() < 3600 and action == "select":
                 await message.answer(
                     f"Предупреждение!⚠️\nЕсли вы отмените слот {record_datetime_str}, ваши средства не будут возвращены",
                     keyboard=choice_keyboard(arg_main="cancel_select", arg_confirm="cancel_select", arg_reject="cancel_select"),
@@ -584,11 +493,9 @@ class User(Role):
                 vk_user = (await message.ctx_api.users.get(message.from_id))[0]
                 full_name = f"{vk_user.first_name} {vk_user.last_name}"
                 user_link = f"https://vk.com/id{message.from_id}"
-                
 
                 admin_message = f"Пользователь {full_name} - {user_link} отменил запись {record_datetime_str} " + "без возврата денег" if action == "confirm" else "с возвратом денег"
                
-
                 for admin_id in ADMIN_IDS:
                     try:
                         await bot.api.messages.send(
@@ -614,19 +521,11 @@ class User(Role):
                     f"{details}",
                     keyboard=paginate_buttons(bookings, target="record", buttons_per_row=1, rows_per_page=8),
                 )  
-        # async def handle_cancel_list_page(message: Message, page: int):
-        #     """Обработчик смены страницы"""
-            
-        #     # Получаем все записи из контекста или заново
-        #     context = self.context.get(message.from_id, {})
-        #     bookings = context.get("bookings", get_user_active_bookings(message.from_id))
-            
-        #     await show_cancel_page(message, bookings, page)
 
         async def show_cancel_page(message: Message, bookings: list, page: int):
             """Показывает страницу с записями"""
             rows_per_page = 8
-            keyboard = paginate_buttons(bookings, page=page, target="record", buttons_per_row=1,rows_per_page=rows_per_page)
+            keyboard = paginate_buttons(bookings, page=page, target="record", buttons_per_row=1, rows_per_page=rows_per_page)
             total_pages = max(1, (len(bookings) + rows_per_page-1) // rows_per_page)  # Округление вверх
             
             text = f"Список записей (страница {page + 1} из {total_pages}):\nИспользуйте кнопки для выбора записи."
@@ -653,7 +552,7 @@ class User(Role):
             for record in records:
                 lines.append(self.format_booking(record))
             await message.answer(
-                "\n".join(lines),
+                "\n\n".join(lines),
                 keyboard=user_menu(),
             )
 
@@ -686,6 +585,11 @@ class User(Role):
                 "💬 Можете писать отзывы и предложения — что добавить или убрать. Будем развиваться 🤗"
             )
             await message.answer(
-                f"{self.HELP_TEXT}\nВыберите действие:",
+                f"Доступные команды:\n"
+                "• «Записаться» — выбрать дату, время и опции\n"
+                "• «Мои записи» — посмотреть активные брони\n"
+                "• «Отменить запись» — отменить конкретную запись\n"
+                "• «Связаться с админом» — получить контакт\n"
+                "• «Привет» или «Начать» или «Старт»  — показать меню заново\n"
+                "Выберите действие:",
                 keyboard=user_menu())
-
