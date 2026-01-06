@@ -50,7 +50,7 @@ async def notification_loop(bot: Bot):
         moscow_tz = timezone(offset, name='МСК')
         now = datetime.now(moscow_tz)
 
-        today_bookings = get_bookings(
+        today_bookings = await get_bookings(
             date=now.date(),
             statuses={STATUS_CONFIRMED},
         )
@@ -117,7 +117,7 @@ async def notification_loop(bot: Bot):
         
         # Удаляем прошедшие записи (которые уже прошли более чем на WASH_DURATION_MIN + NOTIFY_AFTER_MIN минут)
         # Проверяем все подтвержденные записи, не только за сегодня
-        all_bookings = get_bookings()
+        all_bookings = await get_bookings()
         processed_today_ids = {booking.get("_row") for booking in today_bookings}
         
         for booking in all_bookings:
@@ -140,7 +140,7 @@ async def notification_loop(bot: Bot):
             )
             if now > booking_end_time:
                 try:
-                    complete_booking(booking)
+                    await complete_booking(booking)
                     logger.info(
                         "Автоматически удалена прошедшая запись: %s %s",
                         booking['Дата'],
@@ -155,11 +155,11 @@ async def notification_loop(bot: Bot):
 
         # Периодически очищаем истекшие записи из кеша
         cache = get_cache()
-        cache.clear_expired()
-        
+        await cache.clear_expired()
+
         # Проверяем изменения в Google Sheets и обновляем кеш при необходимости
         try:
-            check_sheet_changes()
+            await check_sheet_changes()
         except Exception as exc:
             logger.warning(f"Ошибка при проверке изменений в Google Sheets: {exc}")
 

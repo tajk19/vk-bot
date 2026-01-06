@@ -83,10 +83,10 @@ class User(Role):
                 return
 
             await message.answer("⏳ Загрузка доступных дат...")
-            
-            active_bookings = get_bookings(statuses=ACTIVE_STATUSES)
-            
-            if not self.available_dates(active_bookings):
+
+            active_bookings = await get_bookings(statuses=ACTIVE_STATUSES)
+
+            if not await self.available_dates(active_bookings):
                 await message.answer(
                     "❌ Сейчас нет свободных слотов для записи.\n"
                     f"Свяжитесь с администратором: {ADMIN_CONTACT_URL}",
@@ -101,7 +101,7 @@ class User(Role):
             }
             await message.answer(
                 "Выберите дату для записи:",
-                keyboard=self.date_keyboard(active_bookings=active_bookings),
+                keyboard=await self.date_keyboard(active_bookings=active_bookings),
             )
 
         @self.labeler.private_message(
@@ -116,7 +116,7 @@ class User(Role):
                 return
             
             if active_bookings is None:
-                active_bookings = get_bookings(statuses=ACTIVE_STATUSES)
+                active_bookings = await get_bookings(statuses=ACTIVE_STATUSES)
                 self.context[message.from_id]["active_bookings"] = active_bookings
 
             if action == "back_to_menu":
@@ -131,14 +131,14 @@ class User(Role):
                 page = payload.get("page", 0)
                 await message.answer(
                     "Выберите дату для записи:",
-                    keyboard=self.date_keyboard(page=page, active_bookings=active_bookings),
+                    keyboard=await self.date_keyboard(page=page, active_bookings=active_bookings),
                 )
                 return
 
             if action != "select":
                 await message.answer(
                     "❌ Пожалуйста, выберите дату с клавиатуры.",
-                    keyboard=self.date_keyboard(active_bookings=active_bookings),
+                    keyboard=await self.date_keyboard(active_bookings=active_bookings),
                 )
                 return
                 
@@ -149,23 +149,23 @@ class User(Role):
             except ValueError:
                 await message.answer(
                     "❌ Пожалуйста, выберите дату с клавиатуры.",
-                    keyboard=self.date_keyboard(active_bookings=active_bookings),
+                    keyboard=await self.date_keyboard(active_bookings=active_bookings),
                 )
                 return
 
             if selected_date not in self.booking_window_dates():
                 await message.answer(
                     "❌ Эту дату выбрать нельзя. Попробуйте другую:",
-                    keyboard=self.date_keyboard(active_bookings=active_bookings),
+                    keyboard=await self.date_keyboard(active_bookings=active_bookings),
                 )
                 return
 
-            free_times, keyboard = self.time_keyboard(selected_date=selected_date)
+            free_times, keyboard = await self.time_keyboard(selected_date=selected_date)
             if not free_times:
                 await message.answer(
                     "❌ На выбранную дату нет свободных слотов.\n"
                     "Выберите другую дату или свяжитесь с администратором.",
-                    keyboard=self.date_keyboard(active_bookings=active_bookings),
+                    keyboard=await self.date_keyboard(active_bookings=active_bookings),
                 )
                 return
             
@@ -206,20 +206,20 @@ class User(Role):
             selected_date = context["date"]
             active_bookings = context.get("active_bookings")
             if active_bookings is None:
-                active_bookings = get_bookings(statuses=ACTIVE_STATUSES)
+                active_bookings = await get_bookings(statuses=ACTIVE_STATUSES)
                 context["active_bookings"] = active_bookings
 
             if action == "one_step_back":
                 self.context[message.from_id]["step"] = "choose_date"
                 await message.answer(
                     "Выберите дату для записи:",
-                    keyboard=self.date_keyboard(page=0, active_bookings=active_bookings),
+                    keyboard=await self.date_keyboard(page=0, active_bookings=active_bookings),
                 )
                 return
                 
             if action == "paginate":
                 page = payload.get("page", 0)
-                _, keyboard = self.time_keyboard(selected_date=selected_date, page=page)
+                _, keyboard = await self.time_keyboard(selected_date=selected_date, page=page)
                 await message.answer(
                     "Выберите время:",
                     keyboard=keyboard,
@@ -234,15 +234,15 @@ class User(Role):
             try:
                 datetime.strptime(time_text, TIME_FORMAT)
             except ValueError:
-                _, keyboard = self.time_keyboard(selected_date=selected_date)
+                _, keyboard = await self.time_keyboard(selected_date=selected_date)
                 await message.answer(
                     "❌ Пожалуйста, выберите время с клавиатуры.",
                     keyboard=keyboard,
                 )
                 return
 
-            if not is_time_free(selected_date, time_text):
-                _, keyboard = self.time_keyboard(selected_date=selected_date)
+            if not await is_time_free(selected_date, time_text):
+                _, keyboard = await self.time_keyboard(selected_date=selected_date)
                 await message.answer(
                     "❌ Слот уже занят. Выберите другое время:",
                     keyboard=keyboard,
@@ -251,7 +251,7 @@ class User(Role):
 
             bookings_same_day = [
                 record
-                for record in get_user_active_bookings(message.from_id)
+                for record in await get_user_active_bookings(message.from_id)
                 if record.get("Дата") == datetime.strftime(selected_date, DATE_FORMAT)
             ]
             if len(bookings_same_day) >= MAX_SLOTS_PER_DAY:
@@ -300,11 +300,11 @@ class User(Role):
             
             if action == "one_step_back":
                 context.pop("time")
-                context.pop("price") 
+                context.pop("price")
                 self.context[message.from_id]["step"] = "choose_time"
                 await message.answer(
                     "Выберите дату для записи:",
-                    keyboard=self.time_keyboard(page=0, selected_date=selected_date),
+                    keyboard=await self.time_keyboard(page=0, selected_date=selected_date),
                 )
                 return
             
@@ -349,7 +349,7 @@ class User(Role):
                 return
 
             time_text = context["time"]
-            if not is_time_free(selected_date, time_text):
+            if not await is_time_free(selected_date, time_text):
                 self.reset_context(message.from_id)
                 await message.answer(
                     "❌ Пока вы выбирали опции, слот заняли. Попробуйте снова.",
@@ -364,7 +364,7 @@ class User(Role):
             wash_option = ", ".join(selected_options) if selected_options else "Без добавок"
             price = context["price"]
 
-            add_booking(
+            await add_booking(
                 user_name=full_name,
                 user_link=user_link,
                 date=datetime.strftime(selected_date, DATE_FORMAT),
@@ -404,7 +404,7 @@ class User(Role):
 
         @self.labeler.private_message(text=["отменить запись"], func=self.is_user)
         async def cancel_booking(message: Message):
-            bookings = get_user_active_bookings(message.from_id)
+            bookings = await get_user_active_bookings(message.from_id)
             if not bookings:
                 await message.answer(
                     "❌ У вас нет активных записей.",
@@ -445,7 +445,7 @@ class User(Role):
                 return
         
             context = self.context.get(message.from_id, {})
-            bookings = get_user_active_bookings(message.from_id)
+            bookings = await get_user_active_bookings(message.from_id)
             context["bookings"] = {record["_row"]: record for record in bookings}
             
             if payload.get("row") is not None:
@@ -508,7 +508,7 @@ class User(Role):
                             "Не удалось уведомить администратора %s: %s", admin_id, exc
                         )
 
-                delete_booking(record)
+                await delete_booking(record)
                 self.reset_context(message.from_id)
                 await message.answer(
                     "✅ Запись отменена.",
@@ -540,7 +540,7 @@ class User(Role):
 
         @self.labeler.private_message(text=["мои записи"], func=self.is_user)
         async def my_bookings(message: Message):
-            records = get_user_active_bookings(message.from_id)
+            records = await get_user_active_bookings(message.from_id)
             if not records:
                 await message.answer(
                     "❌ У вас нет активных записей.",

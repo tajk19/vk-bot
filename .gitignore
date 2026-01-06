@@ -1,6 +1,42 @@
+# Python
+venv
 .venv
 __pycache__
-credentials.json
-amvera.yml
-.env
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
 
+# Файлы окружения и учетные данные (НИКОГДА НЕ КОММИТИТЬ!)
+.env
+.env.local
+.env.*.local
+credentials.json
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# ОС
+.DS_Store
+Thumbs.db
+
+# Развертывание
+amvera.yml
+
+# Логи
+*.log
+logs/
+
+# Временные файлы
+*.tmp
+*.bak
+*.cache

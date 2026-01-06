@@ -4,6 +4,7 @@
 Использует кеширование для оптимизации производительности.
 """
 #https://docs.google.com/spreadsheets/d/1s9zB97Qxnp1YpoJMlB9wbRAk_b51D-9cDfBcsQvQu9g/edit?gid=0#gid=0
+import asyncio
 from datetime import datetime, timedelta, timezone
 import time
 import logging
@@ -38,20 +39,10 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 
-# Авторизация и подключение к таблице
-credentials = Credentials.from_service_account_file(
-    SERVICE_ACCOUNT_FILE,
-    scopes=SCOPES,
-)
-
-gc = gspread.authorize(credentials)
-# Инициализируем Drive API для проверки изменений
-drive_service = build("drive", "v3", credentials=credentials)
-
-# Открываем таблицу и листы
-spreadsheet = gc.open(SPREADSHEET_NAME)
+# Константы для листов и заголовков
 LIST_SHEET_NAME = "List"
-list_sheet = spreadsheet.worksheet(LIST_SHEET_NAME)  # основной лист с записями
+BLACKLIST_SHEET_NAME = "Blacklist"
+SCHEDULE_SHEET_NAME = "Schedule"
 
 BOOKING_HEADER = [
     "Пользователь",
@@ -67,6 +58,14 @@ BOOKING_HEADER = [
     "Причина отказа",
 ]
 
+BLACKLIST_HEADER = ["Ссылка"]
+
+SCHEDULE_HEADER = [
+    "День недели",
+    "Начало",
+    "Конец",
+]
+
 STATUS_PENDING = "На подтверждении"
 STATUS_CONFIRMED = "Подтвержден"
 STATUS_REJECTED = "Отказан"
@@ -74,38 +73,107 @@ STATUS_BLOCKED = "Заблокировано администратором"
 
 ACTIVE_STATUSES = {STATUS_PENDING, STATUS_CONFIRMED, STATUS_BLOCKED}
 
-BLACKLIST_SHEET_NAME = "Blacklist"
-blacklist_sheet = spreadsheet.worksheet(BLACKLIST_SHEET_NAME)
-BLACKLIST_HEADER = ["Ссылка"]
+logger = logging.getLogger(__name__)
 
-SCHEDULE_SHEET_NAME = "Schedule"
-schedule_sheet = spreadsheet.worksheet(SCHEDULE_SHEET_NAME)
-SCHEDULE_HEADER = [
-    "День недели",
-    "Начало",
-    "Конец",
-]
+# Глобальные переменные для lazy инициализации
+_credentials = None
+_gc = None
+_drive_service = None
+_spreadsheet = None
+_list_sheet = None
+_blacklist_sheet = None
+_schedule_sheet = None
+_initialized = False
+_init_lock = asyncio.Lock()
 
 
 def _ensure_header(ws: gspread.Worksheet, expected_header: List[str]) -> None:
     """
     Проверяет и обновляет заголовок листа, если он не соответствует ожидаемому.
-    
+
     Args:
         ws: Рабочий лист Google Sheets
         expected_header: Ожидаемый список заголовков
     """
-    current_header = ws.row_values(1)
-    if current_header != expected_header:
-        end_column = chr(ord("A") + len(expected_header) - 1)
-        ws.update(f"A1:{end_column}1", [expected_header])
+    try:
+        current_header = ws.row_values(1)
+        if current_header != expected_header:
+            end_column = chr(ord("A") + len(expected_header) - 1)
+            ws.update(f"A1:{end_column}1", [expected_header])
+    except Exception as e:
+        logger.warning(f"Не удалось проверить/обновить заголовок листа: {e}")
 
 
-_ensure_header(list_sheet, BOOKING_HEADER)
-_ensure_header(blacklist_sheet, BLACKLIST_HEADER)
-_ensure_header(schedule_sheet, SCHEDULE_HEADER)
+async def _init_google_sheets() -> bool:
+    """
+    Инициализирует подключение к Google Sheets (lazy initialization).
+    Вызывается автоматически при первом обращении к данным.
 
-logger = logging.getLogger(__name__)
+    Returns:
+        True если инициализация успешна, False в случае ошибки
+    """
+    global _credentials, _gc, _drive_service, _spreadsheet
+    global _list_sheet, _blacklist_sheet, _schedule_sheet, _initialized
+
+    async with _init_lock:
+        # Если уже инициализировано, просто возвращаем True
+        if _initialized:
+            return True
+
+        try:
+            logger.info("Инициализация подключения к Google Sheets...")
+
+            # Выполняем инициализацию в executor, чтобы не блокировать event loop
+            def init():
+                global _credentials, _gc, _drive_service, _spreadsheet
+                global _list_sheet, _blacklist_sheet, _schedule_sheet
+
+                # Авторизация
+                _credentials = Credentials.from_service_account_file(
+                    SERVICE_ACCOUNT_FILE,
+                    scopes=SCOPES,
+                )
+
+                _gc = gspread.authorize(_credentials)
+                _drive_service = build("drive", "v3", credentials=_credentials)
+
+                # Открываем таблицу и листы
+                _spreadsheet = _gc.open(SPREADSHEET_NAME)
+                _list_sheet = _spreadsheet.worksheet(LIST_SHEET_NAME)
+                _blacklist_sheet = _spreadsheet.worksheet(BLACKLIST_SHEET_NAME)
+                _schedule_sheet = _spreadsheet.worksheet(SCHEDULE_SHEET_NAME)
+
+                # Проверяем заголовки
+                _ensure_header(_list_sheet, BOOKING_HEADER)
+                _ensure_header(_blacklist_sheet, BLACKLIST_HEADER)
+                _ensure_header(_schedule_sheet, SCHEDULE_HEADER)
+
+            # Выполняем в отдельном потоке
+            await asyncio.get_event_loop().run_in_executor(None, init)
+
+            _initialized = True
+            logger.info("✅ Google Sheets успешно инициализирован")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка инициализации Google Sheets: {e}")
+            logger.error(
+                "Проверьте наличие файла credentials.json и подключение к интернету"
+            )
+            return False
+
+
+def _get_sheets():
+    """
+    Возвращает объекты листов. Используется внутренними функциями.
+    Предполагается, что инициализация уже выполнена.
+    """
+    if not _initialized:
+        raise RuntimeError(
+            "Google Sheets не инициализирован. "
+            "Вызовите await _init_google_sheets() перед использованием."
+        )
+    return _list_sheet, _blacklist_sheet, _schedule_sheet, _spreadsheet, _drive_service
 
 
 def with_retries(loader, retries=5, base_delay=0.5):
@@ -131,20 +199,24 @@ def with_retries(loader, retries=5, base_delay=0.5):
 def _get_sheet_modified_time() -> Optional[datetime]:
     """
     Получает время последнего изменения таблицы через Drive API.
-    
+
     Returns:
         Время последнего изменения или None при ошибке
     """
+    if not _initialized:
+        return None
+
     try:
+        _, _, _, spreadsheet, drive_service = _get_sheets()
         # Получаем ID файла таблицы
         file_id = spreadsheet.id
-        
+
         # Получаем информацию о файле
         file_metadata = drive_service.files().get(
             fileId=file_id,
             fields="modifiedTime"
         ).execute()
-        
+
         modified_time_str = file_metadata.get("modifiedTime")
         if modified_time_str:
             # Парсим время в формате ISO 8601
@@ -160,24 +232,24 @@ def _get_sheet_modified_time() -> Optional[datetime]:
 _last_modified_time: Optional[datetime] = None
 
 
-def check_sheet_changes() -> None:
+async def check_sheet_changes() -> None:
     """
     Проверяет изменения в Google Sheets и инвалидирует кеш при необходимости.
     Вызывается периодически для автоматического обновления кеша при ручных изменениях в таблице.
     """
     global _last_modified_time
-    
+
     current_time = _get_sheet_modified_time()
-    
+
     if current_time is None:
         # Если не удалось получить время, пропускаем проверку
         return
-    
+
     # Если это первая проверка, просто сохраняем время
     if _last_modified_time is None:
         _last_modified_time = current_time
         return
-    
+
     # Если время изменилось, значит были изменения в таблице
     if current_time > _last_modified_time:
         logger.info(
@@ -186,9 +258,9 @@ def check_sheet_changes() -> None:
             f"инвалидируем весь кеш"
         )
         # Инвалидируем все кеши, так как мы не знаем, какой именно лист изменился
-        invalidate_bookings_cache()
-        invalidate_blacklist_cache()
-        invalidate_schedule_cache()
+        await invalidate_bookings_cache()
+        await invalidate_blacklist_cache()
+        await invalidate_schedule_cache()
         _last_modified_time = current_time
 
 
@@ -250,7 +322,7 @@ def _filter_records(
 # -------------------------
 # Работа с бронированиями
 # -------------------------
-def get_bookings(
+async def get_bookings(
     *,
     date: Optional[datetime.date] = None,
     user_id: Optional[int] = None,
@@ -259,20 +331,27 @@ def get_bookings(
     """
     Получает список бронирований с возможностью фильтрации.
     Использует кеширование для оптимизации производительности.
-    
+
     Args:
         date: Фильтр по дате (опционально)
         user_id: Фильтр по ID пользователя (опционально)
         statuses: Фильтр по статусам (опционально)
-        
+
     Returns:
         Список записей, соответствующих фильтрам
     """
+    # Инициализируем подключение при первом использовании
+    if not await _init_google_sheets():
+        logger.error("Не удалось подключиться к Google Sheets")
+        return []
+
+    list_sheet, _, _, _, _ = _get_sheets()
+
     # Загружаем все бронирования из кеша или из таблицы
     def loader():
         return _fetch_records(list_sheet)
-    
-    if date: 
+
+    if date:
         date_str = str(datetime.strftime(date, DATE_FORMAT))
     else:
         date_str = None
@@ -285,7 +364,7 @@ def get_bookings(
         statuses_tuple = tuple(statuses)
 
 
-    all_records = get_cached_bookings(
+    all_records = await get_cached_bookings(
         loader=with_retries(loader),
         date=date_str,
         user_id=user_id,
@@ -295,7 +374,7 @@ def get_bookings(
     return all_records
 
 
-def add_booking(
+async def add_booking(
     user_name: str,
     user_link: str,
     date: datetime.date,
@@ -309,7 +388,7 @@ def add_booking(
 ) -> None:
     """
     Добавляет новое бронирование в таблицу.
-    
+
     Args:
         user_name: Имя пользователя
         user_link: Ссылка на профиль пользователя VK
@@ -322,6 +401,13 @@ def add_booking(
         confirmed_at: Время подтверждения (по умолчанию пустая строка)
         decline_reason: Причина отказа (по умолчанию пустая строка)
     """
+    if not await _init_google_sheets():
+        logger.error("Не удалось подключиться к Google Sheets")
+        return None
+
+    # Get sheet references
+    list_sheet, blacklist_sheet, schedule_sheet, spreadsheet, drive_service = _get_sheets()
+
     date_str = str(date)
     record = {
         "Пользователь": user_name,
@@ -338,57 +424,71 @@ def add_booking(
     }
     list_sheet.append_row(_values_from_record(record))
     # Инвалидируем кеш бронирований после добавления
-    invalidate_bookings_cache()
+    await invalidate_bookings_cache()
 
 
-def update_booking(record: Dict[str, str], updates: Dict[str, str]) -> Dict[str, str]:
+async def update_booking(record: Dict[str, str], updates: Dict[str, str]) -> Dict[str, str]:
+    if not await _init_google_sheets():
+        logger.error("Не удалось подключиться к Google Sheets")
+        return {}
+
+    # Get sheet references
+    list_sheet, blacklist_sheet, schedule_sheet, spreadsheet, drive_service = _get_sheets()
+
     updated = {**record, **updates}
     list_sheet.update(_row_range(record["_row"]), [_values_from_record(updated)])
     updated["_row"] = record["_row"]
     # Инвалидируем кеш бронирований после обновления
-    invalidate_bookings_cache()
+    await invalidate_bookings_cache()
     return updated
 
 
-def delete_booking(record: Dict[str, str]) -> bool:
+async def delete_booking(record: Dict[str, str]) -> bool:
+    if not await _init_google_sheets():
+        logger.error("Не удалось подключиться к Google Sheets")
+        return False
+
+    # Get sheet references
+    list_sheet, blacklist_sheet, schedule_sheet, spreadsheet, drive_service = _get_sheets()
+
     try:
         list_sheet.delete_rows(record["_row"])
-        invalidate_bookings_cache()
+        await invalidate_bookings_cache()
         return True
     except Exception:
         return False
 
 
 
-def is_time_free(date: datetime.date, time_slot: str) -> bool:
-    records = get_bookings(date=date)
+async def is_time_free(date: datetime.date, time_slot: str) -> bool:
+    records = await get_bookings(date=date)
     for record in records:
         if record.get("Время") == time_slot and record.get("Статус") in ACTIVE_STATUSES:
             return False
     return True
 
 
-def get_user_active_bookings(user_id: int) -> List[Dict[str, str]]:
-    return get_bookings(
+async def get_user_active_bookings(user_id: int) -> List[Dict[str, str]]:
+    return await get_bookings(
         user_id=user_id,
         statuses=ACTIVE_STATUSES,
     )
 
 
-def get_pending_bookings() -> List[Dict[str, str]]:
-    return get_bookings(statuses={STATUS_PENDING})
+async def get_pending_bookings() -> List[Dict[str, str]]:
+    return await get_bookings(statuses={STATUS_PENDING})
 
 
-def get_admin_blockings() -> List[Dict[str, str]]:
-    return get_bookings(statuses={STATUS_BLOCKED})
+async def get_admin_blockings() -> List[Dict[str, str]]:
+    return await get_bookings(statuses={STATUS_BLOCKED})
 
 
-def set_booking_confirmed(record: Dict[str, str], admin_name: str) -> Dict[str, str]:
+async def set_booking_confirmed(record: Dict[str, str], admin_name: str) -> Dict[str, str]:
     offset = timedelta(hours=3)
     moscow_tz = timezone(offset, name='МСК')
     now = datetime.now(moscow_tz)
 
-    return update_booking(
+    return await update_booking(
         record,
         {
             "Статус": STATUS_CONFIRMED,
@@ -399,7 +499,7 @@ def set_booking_confirmed(record: Dict[str, str], admin_name: str) -> Dict[str, 
     )
 
 
-def set_booking_rejected(
+async def set_booking_rejected(
     record: Dict[str, str],
     admin_name: str,
     reason: str,
@@ -411,7 +511,7 @@ def set_booking_rejected(
         moscow_tz = timezone(offset, name='МСК')
         now = datetime.now(moscow_tz)
 
-        return update_booking(
+        return await update_booking(
             record,
             {
                 "Статус": STATUS_REJECTED,
@@ -420,19 +520,19 @@ def set_booking_rejected(
                 "Причина отказа": reason,
             },
         )
-    delete_booking(record)
+    await delete_booking(record)
     return None
 
 
-def complete_booking(record: Dict[str, str]) -> None:
+async def complete_booking(record: Dict[str, str]) -> None:
     """
     Завершает запись - удаляет её из таблицы.
     Используется когда стирка завершена.
-    
+
     Args:
         record: Словарь с данными записи, включая поле "_row"
     """
-    delete_booking(record)
+    await delete_booking(record)
 
 
 
@@ -440,21 +540,28 @@ def complete_booking(record: Dict[str, str]) -> None:
 # Расписание работы
 # -------------------------
 
-def time_of_begining(idx: int) -> Optional[int]:
+async def time_of_begining(idx: int) -> Optional[int]:
     """
     Возвращает час начала работы для указанного дня недели.
     Использует кеширование для оптимизации производительности.
-    
+
     Args:
         idx: Индекс дня недели (0=понедельник, 6=воскресенье)
-        
+
     Returns:
         Час начала работы или None, если день не найден
     """
+    if not await _init_google_sheets():
+        logger.error("Не удалось подключиться к Google Sheets")
+        return None
+
+    # Get sheet references
+    list_sheet, blacklist_sheet, schedule_sheet, spreadsheet, drive_service = _get_sheets()
+
     def loader():
         return _fetch_records(schedule_sheet)
 
-    records = get_cached_schedule(with_retries(loader))
+    records = await get_cached_schedule(with_retries(loader))
     dict_weekdays = {
         0: "понедельник",
         1: "вторник",
@@ -471,21 +578,28 @@ def time_of_begining(idx: int) -> Optional[int]:
     return None
 
 
-def time_of_end(idx: int) -> Optional[int]:
+async def time_of_end(idx: int) -> Optional[int]:
     """
     Возвращает час окончания работы для указанного дня недели.
     Использует кеширование для оптимизации производительности.
-    
+
     Args:
         idx: Индекс дня недели (0=понедельник, 6=воскресенье)
-        
+
     Returns:
         Час окончания работы или None, если день не найден
     """
+    if not await _init_google_sheets():
+        logger.error("Не удалось подключиться к Google Sheets")
+        return None
+
+    # Get sheet references
+    list_sheet, blacklist_sheet, schedule_sheet, spreadsheet, drive_service = _get_sheets()
+
     def loader():
         return _fetch_records(schedule_sheet)
 
-    records = get_cached_schedule(with_retries(loader))
+    records = await get_cached_schedule(with_retries(loader))
     dict_weekdays = {
         0: "понедельник",
         1: "вторник",
@@ -568,49 +682,65 @@ async def url_to_user_id(url: str, api: API) -> Optional[int]:
     return None
 
 
-def get_blacklist_sync() -> List[str]:
+async def get_blacklist() -> List[str]:
     """
-    Синхронная версия получения черного списка для быстрого доступа.
+    Получает черный список из кеша или из Google Sheets.
     Использует кеширование для оптимизации производительности.
     """
+    if not await _init_google_sheets():
+        logger.error("Не удалось подключиться к Google Sheets")
+        return []
+
+    # Get sheet references
+    list_sheet, blacklist_sheet, schedule_sheet, spreadsheet, drive_service = _get_sheets()
+
     def loader():
         values = blacklist_sheet.get_all_values()
         return [row[0] for row in values[1:] if row and row[0].strip()]
 
-    return get_cached_blacklist(with_retries(loader))
-
-
-async def get_blacklist() -> List[str]:
-    """Асинхронная обертка для совместимости."""
-    return get_blacklist_sync()
+    return await get_cached_blacklist(with_retries(loader))
 
 
 async def add_blacklist(api: API, user_link: str) -> bool:
     """
     Добавляет пользователя в черный список.
-    
+
     Args:
         api: API объект VK для преобразования URL в ID
         user_link: Ссылка на пользователя VK
     """
+    if not await _init_google_sheets():
+        logger.error("Не удалось подключиться к Google Sheets")
+        return False
+
+    # Get sheet references
+    list_sheet, blacklist_sheet, schedule_sheet, spreadsheet, drive_service = _get_sheets()
+
     match = await url_to_user_id(user_link, api)
     if not match:
         return False
     vk_link = f"https://vk.com/id{match}"
-    blacklist = get_blacklist_sync()
+    blacklist = await get_blacklist()
     if vk_link not in blacklist:
         blacklist_sheet.append_row([vk_link])
         # Инвалидируем кеш черного списка после добавления
-        invalidate_blacklist_cache()
+        await invalidate_blacklist_cache()
     return True
 
 
-def remove_blacklist(user_link: str) -> bool:
+async def remove_blacklist(user_link: str) -> bool:
+    if not await _init_google_sheets():
+        logger.error("Не удалось подключиться к Google Sheets")
+        return False
+
+    # Get sheet references
+    list_sheet, blacklist_sheet, schedule_sheet, spreadsheet, drive_service = _get_sheets()
+
     values = blacklist_sheet.get_all_values()
     for idx, row in enumerate(values, start=1):
         if row and row[0] == user_link:
             blacklist_sheet.delete_rows(idx)
             # Инвалидируем кеш черного списка после удаления
-            invalidate_blacklist_cache()
+            await invalidate_blacklist_cache()
             return True
     return False

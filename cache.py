@@ -1,10 +1,11 @@
 """
 Модуль кеширования данных из Google Sheets.
-Обеспечивает thread-safe кеширование с автоматической инвалидацией при изменениях.
-Использует threading.Lock для синхронных операций с Google Sheets API.
+Обеспечивает async-safe кеширование с автоматической инвалидацией при изменениях.
+Использует asyncio.Lock для асинхронных операций с Google Sheets API.
+Реализует single-flight pattern для предотвращения cache stampede.
 """
+import asyncio
 import logging
-import threading
 import time
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -12,7 +13,6 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from config import DATETIME_FORMAT
 
 logger = logging.getLogger(__name__)
-
 
 
 class CacheEntry:
@@ -43,10 +43,11 @@ class CacheEntry:
 
 
 class Cache:
-
     """
-    Thread-safe кеш для данных из Google Sheets.
-    Использует threading.Lock для обеспечения безопасности при одновременном доступе.
+    Async-safe кеш для данных из Google Sheets.
+    Использует asyncio.Lock для обеспечения безопасности при одновременном доступе.
+    Реализует single-flight pattern: если несколько корутин запрашивают один ключ,
+    только одна загружает данные, остальные ждут результата.
     """
 
     def __init__(self, default_ttl: Optional[float] = 300):
@@ -57,47 +58,135 @@ class Cache:
             default_ttl: Время жизни кеша по умолчанию в секундах (5 минут)
         """
         self._cache: Dict[str, CacheEntry] = {}
-        self._lock = threading.Lock()
+        self._lock = asyncio.Lock()
+        # Словарь для отслеживания текущих загрузок (single-flight pattern)
+        self._pending: Dict[str, asyncio.Task] = {}
         self.default_ttl = default_ttl
 
-    def get(
+    async def get(
         self,
         key: str,
         loader: Optional[Callable[[], Any]] = None,
         ttl: Optional[float] = None,
     ) -> Any:
-        
-        with self._lock:
+        """
+        Получает данные из кеша или загружает их через loader.
+        Реализует double-checked locking для предотвращения cache stampede.
+
+        Args:
+            key: Ключ кеша
+            loader: Функция для загрузки данных (может быть sync или async)
+            ttl: Время жизни кеша (если не указано, используется default_ttl)
+
+        Returns:
+            Закешированные или загруженные данные
+        """
+        # Первая проверка (без блокировки, быстрая)
+        entry = self._cache.get(key)
+        if entry and not entry.is_expired():
+            return entry.data
+
+        # Если loader не передан, возвращаем что есть
+        if loader is None:
+            return entry.data if entry else None
+
+        # Проверяем, не загружается ли уже этот ключ другой корутиной
+        async with self._lock:
+            # Вторая проверка (под блокировкой)
             entry = self._cache.get(key)
             if entry and not entry.is_expired():
                 return entry.data
 
-        if loader is None:
-            return entry.data if entry else None
+            # Проверяем pending загрузки
+            if key in self._pending:
+                # Другая корутина уже загружает данные, ждем результата
+                pending_task = self._pending[key]
+                # Освобождаем lock, чтобы не блокировать других
+                pass  # lock освободится при выходе из блока
 
-        # Выполняем loader вне lock
-        try:
-            data = loader()
-        except Exception as e:
+        # Если есть pending задача, ждем ее завершения
+        if key in self._pending:
+            try:
+                await self._pending[key]
+            except Exception:
+                pass  # Ошибка будет обработана в загружающей корутине
+            # После завершения pending задачи данные должны быть в кеше
+            entry = self._cache.get(key)
+            if entry and not entry.is_expired():
+                return entry.data
+            # Если данных все еще нет, пробуем загрузить сами
             if entry:
-                return entry.data  # fallback на старые данные
+                return entry.data
+
+        # Создаем задачу загрузки
+        async with self._lock:
+            # Тройная проверка - возможно, пока мы ждали lock, кто-то уже загрузил
+            entry = self._cache.get(key)
+            if entry and not entry.is_expired():
+                return entry.data
+
+            # Создаем задачу загрузки и добавляем в pending
+            load_task = asyncio.create_task(self._load_and_cache(key, loader, ttl))
+            self._pending[key] = load_task
+
+        # Выполняем загрузку
+        try:
+            return await load_task
+        finally:
+            # Удаляем из pending после завершения
+            async with self._lock:
+                self._pending.pop(key, None)
+
+    async def _load_and_cache(
+        self,
+        key: str,
+        loader: Callable[[], Any],
+        ttl: Optional[float],
+    ) -> Any:
+        """
+        Внутренний метод для загрузки и кеширования данных.
+
+        Args:
+            key: Ключ кеша
+            loader: Функция загрузки (sync или async)
+            ttl: Время жизни кеша
+
+        Returns:
+            Загруженные данные
+        """
+        # Выполняем loader (может быть sync или async)
+        try:
+            # Проверяем, является ли loader корутиной
+            if asyncio.iscoroutinefunction(loader):
+                data = await loader()
+            else:
+                # Sync функция - выполняем в executor, чтобы не блокировать event loop
+                data = await asyncio.get_event_loop().run_in_executor(None, loader)
+        except Exception as e:
+            logger.error(f"Ошибка загрузки данных для ключа {key}: {e}")
+            # Пробуем вернуть старые данные как fallback
+            entry = self._cache.get(key)
+            if entry:
+                logger.warning(f"Используем устаревшие данные для ключа {key}")
+                return entry.data
             raise
 
         # Сохраняем результат в кеш под lock
-        with self._lock:
+        async with self._lock:
             ttl_to_use = ttl if ttl is not None else self.default_ttl
             self._cache[key] = CacheEntry(data, ttl_to_use)
+            logger.debug(f"Данные закешированы для ключа {key} с TTL={ttl_to_use}с")
 
         return data
 
-    def invalidate(self, key: Optional[str] = None) -> None:
+    async def invalidate(self, key: Optional[str] = None) -> None:
         """
         Инвалидирует кеш (удаляет запись или все записи).
 
         Args:
             key: Ключ для удаления (None = удалить все)
         """
-        with self._lock:
+        async with self._lock:
             if key is None:
                 self._cache.clear()
                 logger.debug("Весь кеш очищен")
@@ -106,23 +195,23 @@ class Cache:
                     del self._cache[key]
                     logger.debug(f"Кеш инвалидирован для ключа: {key}")
 
-    def invalidate_pattern(self, pattern: str) -> None:
+    async def invalidate_pattern(self, pattern: str) -> None:
         """
         Инвалидирует все ключи, начинающиеся с указанного паттерна.
 
         Args:
             pattern: Паттерн для поиска ключей
         """
-        with self._lock:
+        async with self._lock:
             keys_to_remove = [key for key in self._cache.keys() if key.startswith(pattern)]
             for key in keys_to_remove:
                 del self._cache[key]
             if keys_to_remove:
                 logger.debug(f"Инвалидировано {len(keys_to_remove)} ключей с паттерном: {pattern}")
 
-    def clear_expired(self) -> None:
+    async def clear_expired(self) -> None:
         """Удаляет все истекшие записи из кеша."""
-        with self._lock:
+        async with self._lock:
             expired_keys = [
                 key for key, entry in self._cache.items() if entry.is_expired()
             ]
@@ -131,20 +220,22 @@ class Cache:
             if expired_keys:
                 logger.debug(f"Удалено {len(expired_keys)} истекших записей из кеша")
 
-    def get_stats(self) -> Dict[str, Any]:
+    async def get_stats(self) -> Dict[str, Any]:
         """
         Возвращает статистику кеша.
 
         Returns:
             Словарь со статистикой кеша
         """
-        with self._lock:
+        async with self._lock:
             total = len(self._cache)
             expired = sum(1 for entry in self._cache.values() if entry.is_expired())
+            pending = len(self._pending)
             return {
                 "total_entries": total,
                 "expired_entries": expired,
                 "valid_entries": total - expired,
+                "pending_loads": pending,
             }
 
 
@@ -156,7 +247,7 @@ _cache: Optional[Cache] = None
 def init_cache(default_ttl: float = 300) -> None:
     """
     Инициализирует глобальный экземпляр кеша.
-    
+
     Args:
         default_ttl: Время жизни кеша по умолчанию в секундах
     """
@@ -169,7 +260,7 @@ def get_cache() -> Cache:
     """
     Возвращает глобальный экземпляр кеша.
     Инициализирует его, если он еще не создан.
-    
+
     Returns:
         Экземпляр кеша
     """
@@ -211,7 +302,7 @@ def get_cache_key_bookings(
     return ":".join(parts)
 
 
-def get_cached_bookings(
+async def get_cached_bookings(
     loader: Callable[[], List[Dict[str, str]]],
     date: Optional[str] = None,
     user_id: Optional[int] = None,
@@ -231,7 +322,7 @@ def get_cached_bookings(
     """
     # Сначала получаем все бронирования из кеша
     cache = get_cache()
-    all_bookings = cache.get(CACHE_KEY_BOOKINGS, loader)
+    all_bookings = await cache.get(CACHE_KEY_BOOKINGS, loader)
 
     if all_bookings is None:
         return []
@@ -247,25 +338,25 @@ def get_cached_bookings(
         statuses_set = set(statuses)
         filtered = [b for b in filtered if b.get("Статус") in statuses_set]
 
+    # Сортируем по дате и времени
     filtered.sort(
         key=lambda r: datetime.strptime(
             r.get("Дата").strip() + " " + r.get("Время").strip(),
             DATETIME_FORMAT,
         )
     )
-    
 
     return filtered
 
 
-def invalidate_bookings_cache() -> None:
+async def invalidate_bookings_cache() -> None:
     """Инвалидирует кеш бронирований."""
     cache = get_cache()
-    cache.invalidate(CACHE_KEY_BOOKINGS)
-    cache.invalidate_pattern("bookings:")
+    await cache.invalidate(CACHE_KEY_BOOKINGS)
+    await cache.invalidate_pattern("bookings:")
 
 
-def get_cached_blacklist(loader: Callable[[], List[str]]) -> List[str]:
+async def get_cached_blacklist(loader: Callable[[], List[str]]) -> List[str]:
     """
     Получает черный список из кеша или загружает его.
 
@@ -276,16 +367,17 @@ def get_cached_blacklist(loader: Callable[[], List[str]]) -> List[str]:
         Список ссылок из черного списка
     """
     cache = get_cache()
-    return cache.get(CACHE_KEY_BLACKLIST, loader) or []
+    result = await cache.get(CACHE_KEY_BLACKLIST, loader)
+    return result or []
 
 
-def invalidate_blacklist_cache() -> None:
+async def invalidate_blacklist_cache() -> None:
     """Инвалидирует кеш черного списка."""
     cache = get_cache()
-    cache.invalidate(CACHE_KEY_BLACKLIST)
+    await cache.invalidate(CACHE_KEY_BLACKLIST)
 
 
-def get_cached_schedule(loader: Callable[[], List[Dict[str, str]]]) -> List[Dict[str, str]]:
+async def get_cached_schedule(loader: Callable[[], List[Dict[str, str]]]) -> List[Dict[str, str]]:
     """
     Получает расписание из кеша или загружает его.
 
@@ -296,11 +388,11 @@ def get_cached_schedule(loader: Callable[[], List[Dict[str, str]]]) -> List[Dict
         Список записей расписания
     """
     cache = get_cache()
-    return cache.get(CACHE_KEY_SCHEDULE, loader) or []
+    result = await cache.get(CACHE_KEY_SCHEDULE, loader)
+    return result or []
 
 
-def invalidate_schedule_cache() -> None:
+async def invalidate_schedule_cache() -> None:
     """Инвалидирует кеш расписания."""
     cache = get_cache()
-    cache.invalidate(CACHE_KEY_SCHEDULE)
-
+    await cache.invalidate(CACHE_KEY_SCHEDULE)

@@ -89,7 +89,7 @@ class Admin(Role):
         @self.labeler.private_message(text=["неподтвержденные"], func=self.is_admin)
         async def pending_list(message: Message):
             self.reset_context(message.from_id)
-            records = get_pending_bookings()
+            records = await get_pending_bookings()
             if not records:
                 await message.answer("📭 Нет заявок, ожидающих подтверждения.")
                 return
@@ -136,7 +136,7 @@ class Admin(Role):
             if action == "admin_confirm":
                 row = str(payload.get("row"))
                 record = next(
-                    (r for r in get_pending_bookings() if str(r["_row"]) == row),
+                    (r for r in await get_pending_bookings() if str(r["_row"]) == row),
                     None,
                 )
                 if not record:
@@ -145,7 +145,7 @@ class Admin(Role):
 
                 admin_info = (await message.ctx_api.users.get(message.from_id))[0]
                 admin_name = f"{admin_info.first_name} {admin_info.last_name}"
-                updated = set_booking_confirmed(record, admin_name)
+                updated = await set_booking_confirmed(record, admin_name)
                 await message.answer(
                     f"✅ Заявка подтверждена.\n{self.format_booking(updated)}",
                     keyboard=back_to_menu_keyboard(),
@@ -161,7 +161,7 @@ class Admin(Role):
             if action == "admin_reject":
                 row = str(payload.get("row"))
                 record = next(
-                    (r for r in get_pending_bookings() if str(r["_row"]) == row),
+                    (r for r in await get_pending_bookings() if str(r["_row"]) == row),
                     None,
                 )
                 if not record:
@@ -212,7 +212,7 @@ class Admin(Role):
             reason: str,
         ) -> None:
             # Удаляем запись
-            updated = delete_booking(record)
+            updated = await delete_booking(record)
             if updated:
                 display_reason = reason if reason else "не указана"
                 await message.answer(
@@ -239,7 +239,7 @@ class Admin(Role):
         async def show_bookings(message: Message):
             self.reset_context(message.from_id)
             # Показываем только подтвержденные записи для завершения
-            bookings = get_bookings(statuses={STATUS_CONFIRMED})
+            bookings = await get_bookings(statuses={STATUS_CONFIRMED})
 
             if not bookings:
                 await message.answer(
@@ -297,7 +297,7 @@ class Admin(Role):
 
             bookings = self.context.get("bookings")
             if bookings is None:
-                bookings = get_bookings(statuses={STATUS_CONFIRMED})
+                bookings = await get_bookings(statuses={STATUS_CONFIRMED})
                 self.context[message.from_id]["bookings"] = bookings
             
             if action == "paginate":
@@ -357,7 +357,7 @@ class Admin(Role):
                 except Exception as exc:
                     self.logger.warning(f"Не удалось отправить уведомление пользователю {user_id}: {exc}")
         
-            complete_booking(target_booking)
+            await complete_booking(target_booking)
             self.reset_context(message.from_id)
             
             await message.answer(
@@ -389,7 +389,7 @@ class Admin(Role):
             self.context[message.from_id] = {"step": "block_date"}
             await message.answer(
                 "Выберите дату для блокировки:",
-                keyboard=self.date_keyboard(),
+                keyboard=await self.date_keyboard(),
             )
 
 
@@ -416,14 +416,14 @@ class Admin(Role):
                 page = payload.get("page", 0)
                 await message.answer(
                     "Выберите дату для блокировки:",
-                    keyboard=self.date_keyboard(active_bookings=active_bookings, page=page),
+                    keyboard=await self.date_keyboard(active_bookings=active_bookings, page=page),
                 )
                 return
 
             if action != "select":
                 await message.answer(
                     "❌ Пожалуйста, выберите дату с клавиатуры.",
-                    keyboard=self.date_keyboard(),
+                    keyboard=await self.date_keyboard(),
                 )
                 return
                     
@@ -433,13 +433,13 @@ class Admin(Role):
             except ValueError:
                 await message.answer(
                     "❌ Неверный формат даты. Используйте YYYY-MM-DD.",
-                    keyboard=self.date_keyboard(),
+                    keyboard=await self.date_keyboard(),
                 )
                 return
 
             self.context[message.from_id]["date"] = selected_date
             self.context[message.from_id]["step"] = "block_time"
-            _, keyboard = self.time_keyboard(selected_date=selected_date)
+            _, keyboard = await self.time_keyboard(selected_date=selected_date)
             await message.answer(
                 f"Дата {format_date_with_weekday(selected_date)} выбрана. Теперь выберите время:",
                 keyboard=keyboard,
@@ -478,13 +478,13 @@ class Admin(Role):
                 page = 0
                 await message.answer(
                     "Выберите дату для записи:",
-                    keyboard=self.date_keyboard(page=page, active_bookings=active_bookings),
+                    keyboard=await self.date_keyboard(page=page, active_bookings=active_bookings),
                 )
                 return
 
             if action == "paginate":
                 page = payload.get("page", 0)
-                _, keyboard = self.time_keyboard(selected_date=selected_date, active_bookings=active_bookings, page=page)
+                _, keyboard = await self.time_keyboard(selected_date=selected_date, active_bookings=active_bookings, page=page)
                 await message.answer(
                     "Выберите время для блокировки:",
                     keyboard=keyboard,
@@ -499,22 +499,22 @@ class Admin(Role):
             try:
                 datetime.strptime(time_text, TIME_FORMAT)
             except ValueError:
-                _, keyboard = self.time_keyboard(selected_date=selected_date)
+                _, keyboard = await self.time_keyboard(selected_date=selected_date)
                 await message.answer(
                     "❌ Неверный формат времени. Используйте HH:MM.",
                     keyboard=keyboard,
                 )
                 return
 
-            if not is_time_free(selected_date, time_text):
-                _, keyboard = self.time_keyboard(selected_date=selected_date)
+            if not await is_time_free(selected_date, time_text):
+                _, keyboard = await self.time_keyboard(selected_date=selected_date)
                 await message.answer(
                     "❌ Слот уже занят или забронирован.",
                     keyboard=keyboard,
                 )
                 return
 
-            add_booking(
+            await add_booking(
                 user_name="Блокировка администратора",
                 user_link="admin_blocked",
                 date=datetime.strftime(selected_date, DATE_FORMAT),
@@ -535,7 +535,7 @@ class Admin(Role):
         @self.labeler.private_message(text=["разблокировать слот"], func=self.is_admin)
         async def start_unblock(message: Message):
             self.reset_context(message.from_id)
-            bookings = get_admin_blockings()
+            bookings = await get_admin_blockings()
             if not bookings:
                 await message.answer("Нет заблокированных слотов.")
                 return
@@ -566,8 +566,8 @@ class Admin(Role):
                     keyboard=admin_menu(),
                 )
                 return
-        
-            bookings = get_admin_blockings()
+
+            bookings = await get_admin_blockings()
             
             if action == "paginate":
                 context = self.context.get(message.from_id, {})
@@ -594,7 +594,7 @@ class Admin(Role):
                 return
             
             self.reset_context(message.from_id)
-            delete_booking(record)
+            await delete_booking(record)
             await message.answer(
                 "✅ Слот разблокирован.",
                 keyboard=admin_menu(),
@@ -682,7 +682,7 @@ class Admin(Role):
                         keyboard=admin_menu(),
                     )
             elif step == "blacklist_remove":
-                removed = remove_blacklist(link)
+                removed = await remove_blacklist(link)
                 self.reset_context(message.from_id)
                 if removed:
                     await message.answer(

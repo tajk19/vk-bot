@@ -60,13 +60,13 @@ class Role():
             for minutes in range(0, 24 * 60, SLOT_INTERVAL_MIN)
         ]
 
-    def free_times_for_date(
+    async def free_times_for_date(
         self,
         selected_date: datetime.date,
         active_bookings: Optional[List[Dict[str, str]]] = None,
     ) -> List[str]:
         if active_bookings is None:
-            bookings = get_bookings(date=selected_date, statuses=ACTIVE_STATUSES)
+            bookings = await get_bookings(date=selected_date, statuses=ACTIVE_STATUSES)
         else:
             date_str = datetime.strftime(selected_date, DATE_FORMAT)
             bookings = [
@@ -85,10 +85,10 @@ class Role():
         current_weekday = selected_date.weekday()
 
         # Начальное время
-        start_hour = time_of_begining(current_weekday)
+        start_hour = await time_of_begining(current_weekday)
 
         # Конечное время
-        end_hour = time_of_end(current_weekday) 
+        end_hour = await time_of_end(current_weekday) 
         
         
         for time_slot in self.all_time_slots():
@@ -121,14 +121,14 @@ class Role():
         dates = [start_of_week + timedelta(days=i) for i in range(14)]
         return [date for date in dates if date >= today]
 
-    def available_dates(self, active_bookings: List[Dict[str, str]]) -> List[datetime.date]:
+    async def available_dates(self, active_bookings: List[Dict[str, str]]) -> List[datetime.date]:
         dates = []
         for date in self.booking_window_dates():
-            if self.free_times_for_date(date, active_bookings):
+            if await self.free_times_for_date(date, active_bookings):
                 dates.append(date)
         return dates
 
-    def date_keyboard(
+    async def date_keyboard(
         self,
         page: int = 0,
         active_bookings: Optional[List[Dict[str, str]]] = None,
@@ -137,7 +137,7 @@ class Role():
         dates = [
             date
             for date in dates
-            if self.free_times_for_date(date, active_bookings)
+            if await self.free_times_for_date(date, active_bookings)
         ]
         formatted = [format_date_with_weekday(date) for date in dates]
         return paginate_buttons(
@@ -148,13 +148,13 @@ class Role():
             rows_per_page=5,
         )
         
-    def time_keyboard(
+    async def time_keyboard(
         self,
         selected_date: datetime.date,
         active_bookings: Optional[List[Dict[str, str]]] = None,
         page: int = 0,
     ):
-        free_times = self.free_times_for_date(selected_date, active_bookings)
+        free_times = await self.free_times_for_date(selected_date, active_bookings)
         keyboard = paginate_buttons(
             free_times,
             target="time",
