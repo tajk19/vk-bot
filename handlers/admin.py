@@ -186,8 +186,6 @@ class Admin(Role):
         async def reject_record(message: Message):
             payload = self.extract_payload(message)
             action = payload.get("action")
-            if not action:
-                return
             
             if action == "back_to_menu":
                 self.reset_context(message.from_id)
